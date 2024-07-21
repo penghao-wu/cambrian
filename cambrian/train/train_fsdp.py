@@ -1734,12 +1734,12 @@ def train(INDEX, attn_implementation=None):
 
     callbacks = []
 
-    if "wandb" in training_args.report_to:
-        wandb_nan_callback = NanInfAlertWandbCallback(metrics=["loss"])
-        callbacks.append(wandb_nan_callback)
-        # rm wandb from training_args.report_to so it doesn't get passed to the Trainer
-        training_args.report_to.remove("wandb")
-        assert "wandb" not in training_args.report_to, training_args.report_to
+    # if "wandb" in training_args.report_to:
+    #     wandb_nan_callback = NanInfAlertWandbCallback(metrics=["loss"])
+    #     callbacks.append(wandb_nan_callback)
+    #     # rm wandb from training_args.report_to so it doesn't get passed to the Trainer
+    #     training_args.report_to.remove("wandb")
+    #     assert "wandb" not in training_args.report_to, training_args.report_to
 
 
     log_rank0("Configuring trainer...")
