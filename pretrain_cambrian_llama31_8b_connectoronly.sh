@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian-4tower-llama31_8b-pretrain" &&
+export CKPT_NAME="cambrian-connectoronly-4tower-llama31_8b-pretrain" &&
 
 export CKPT_DIR="gs://us-central2-storage/cambrian/checkpoints/$CKPT_NAME" &&
 
@@ -15,12 +15,12 @@ python cambrian/train/train_tpu.py \
     --vision_tower_aux_list '["siglip/CLIP-ViT-SO400M-14-384", "openai/clip-vit-large-patch14-336", "facebook/dinov2-giant-res378", "clip-convnext-XXL-multi-stage"]' \
     --vision_tower_aux_token_len_list '[576, 576, 576, 9216]' \
     --image_token_len 576 \
-    --num_query_group 1 \
-    --query_num_list '[576]' \
+    --num_query_group 3 \
+    --query_num_list '[576, 576, 576]' \
     --connector_depth 3 \
     --image_position 91 \
     --vision_hidden_size 1024 \
-    --connector_only False \
+    --connector_only True \
     --num_of_vision_sampler_layers 10 \
     --start_of_vision_sampler_layers 0 \
     --stride_of_vision_sampler_layers 3 \
