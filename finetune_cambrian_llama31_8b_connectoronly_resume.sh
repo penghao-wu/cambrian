@@ -14,7 +14,6 @@ python cambrian/train/train_tpu.py \
     --version llama_v3 \
     --data_path ./7068kL_ins.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./cambrian-connectoronly-4tower-llama31_8b-pretrain/mm_projector.bin \
     --vision_tower_aux_list '["siglip/CLIP-ViT-SO400M-14-384", "openai/clip-vit-large-patch14-336", "facebook/dinov2-giant-res378", "clip-convnext-XXL-multi-stage"]' \
     --vision_tower_aux_token_len_list '[576, 576, 576, 9216]' \
     --image_token_len 576 \
