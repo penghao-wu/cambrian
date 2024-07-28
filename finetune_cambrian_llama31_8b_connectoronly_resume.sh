@@ -7,7 +7,7 @@ export CKPT_NAME="cambrian-connectoronly-4tower-llama31_8b-finetune" &&
 
 export CKPT_DIR="gs://us-central2-storage/cambrian/checkpoints/$CKPT_NAME" &&
 
-export RESUME_CKPT_DIR="/home/cirrascale/cambrian/checkpoints/$CKPT_NAME/checkpoint-4000" &&
+export RESUME_CKPT_DIR="/home/cirrascale/cambrian/checkpoints/$CKPT_NAME/checkpoint-8000" &&
 
 python cambrian/train/train_tpu.py \
     --model_name_or_path /mnt/disks/storage/llm_ckpts/Meta-Llama-3.1-8B-Instruct \
