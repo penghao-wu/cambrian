@@ -454,7 +454,7 @@ def preprocess_llama_3(
             # User Prompt
             elif i % 2 == 1:
                 if i==1 and has_image:
-                    round_len = len(tokenizer_image_token_llama3(rou, tokenizer))
+                    round_len = len(tokenizer_image_token_llama3(rou, tokenizer)) - 1
                 else:
                     round_len = len(tokenizer(rou).input_ids)
                 # Don't predict system prompt
