@@ -1099,6 +1099,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
         num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
         assert num_images == 1, num_images
         image_size = image_sizes[batch_idx]
+
+        assert False, cur_input_ids
         
         image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
         assert False, image_token_indices
