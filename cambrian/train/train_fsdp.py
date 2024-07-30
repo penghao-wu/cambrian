@@ -454,7 +454,7 @@ def preprocess_llama_3(
             # User Prompt
             elif i % 2 == 1:
                 if i==1 and has_image:
-                    round_len = len(tokenizer_image_token_llama3(rou, tokenizer))
+                    round_len = len(tokenizer_image_token_llama3(rou, tokenizer)) - 1
                 else:
                     round_len = len(tokenizer(rou).input_ids)
                 # Don't predict system prompt
@@ -1101,6 +1101,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
         image_size = image_sizes[batch_idx]
         
         image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
+        assert False, image_token_indices
 
         cur_input_ids_im_replaced = []
         cur_labels_im_replaced = []
