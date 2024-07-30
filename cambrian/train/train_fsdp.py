@@ -470,13 +470,13 @@ def preprocess_llama_3(
             
         target[cur_len:] = IGNORE_INDEX
 
-        if cur_len < tokenizer.model_max_length:
-            if cur_len != total_len:
-                target[:] = IGNORE_INDEX
-                print(
-                    f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
-                    f" (ignored)"
-                )
+        # if cur_len < tokenizer.model_max_length:
+        #     if cur_len != total_len:
+        #         target[:] = IGNORE_INDEX
+                # print(
+                #     f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
+                #     f" (ignored)"
+                # )
         
     return dict(
         input_ids=input_ids,
