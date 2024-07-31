@@ -20,7 +20,7 @@ python cambrian/train/train_tpu.py \
     --connector_depth 3 \
     --image_position 35 \
     --vision_hidden_size 1024 \
-    --connector_only False \
+    --connector_only True \
     --num_of_vision_sampler_layers 10 \
     --start_of_vision_sampler_layers 0 \
     --stride_of_vision_sampler_layers 3 \
