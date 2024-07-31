@@ -8,7 +8,7 @@ export CKPT_NAME="cambrian-connectoronly-4tower-llama31_8b-pretrain_1.2m_3tower"
 export CKPT_DIR="gs://us-central2-storage/cambrian/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path /mnt/disks/storage/llm_ckpts/Meta-Llama-3-8B-Instruct \
+    --model_name_or_path /mnt/disks/storage/llm_ckpts/Meta-Llama-3.1-8B-Instruct \
     --version llama_v3 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \

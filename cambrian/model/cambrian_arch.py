@@ -77,7 +77,6 @@ class CambrianMetaModel:
                 self.image_newline = nn.Parameter(
                         torch.empty(config.hidden_size, dtype=self.dtype)
                     )
-
             else:
                 self.vision_tower_aux_list = build_vision_tower_aux_list(config, delay_load=True)
                 config.mm_hidden_size = sum([vision_tower_aux.hidden_size for vision_tower_aux in self.vision_tower_aux_list]) 

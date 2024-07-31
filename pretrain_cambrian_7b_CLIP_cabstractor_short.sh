@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian-7b-pretrain" &&
+export CKPT_NAME="cambrian_7b_CLIP_cabstractor_36_shareGPT4V_pretrain" &&
 
 export CKPT_DIR="gs://us-central2-storage/cambrian/checkpoints/$CKPT_NAME" &&
 
@@ -12,9 +12,9 @@ python cambrian/train/train_tpu.py \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
-    --vision_tower_aux_list '["siglip/CLIP-ViT-SO400M-14-384", "openai/clip-vit-large-patch14-336", "facebook/dinov2-large-res518", "clip-convnext-XXL-multi-stage"]' \
-    --vision_tower_aux_token_len_list '[576, 576, 576, 9216]' \
-    --image_token_len 576 \
+    --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
+    --vision_tower_aux_token_len_list '[576]' \
+    --image_token_len 36 \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \
@@ -24,7 +24,7 @@ python cambrian/train/train_tpu.py \
     --num_of_vision_sampler_layers 10 \
     --start_of_vision_sampler_layers 0 \
     --stride_of_vision_sampler_layers 3 \
-    --mm_projector_type sva \
+    --mm_projector_type cabstractor \
     --mm_vision_sampler_lr 1e-4 \
     --tune_mm_mlp_adapter True \
     --mm_vision_select_layer -2 \

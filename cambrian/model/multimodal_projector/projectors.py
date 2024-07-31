@@ -3,8 +3,8 @@ from functools import partial
 import torch
 import torch.nn as nn
 from einops import rearrange
-# from timm.layers import LayerNorm, LayerNorm2d
-# from timm.models.regnet import RegStage
+from timm.layers import LayerNorm, LayerNorm2d
+from timm.models.regnet import RegStage
 
 
 
@@ -79,84 +79,39 @@ class ConvProjector(Projector):
         return x
 
 
+class CAbstractor(ConvProjector):
+    """C-Abstractor"""
+    def build_net(self):
+        encoder_hidden_size = self.encoder_hidden_size
+        hidden_size = self.hidden_size
+        output_hidden_size = self.output_hidden_size
+        depth = 3
+        mlp_depth = 2
 
+        n_queries = self.num_queries
+        assert (n_queries ** 0.5).is_integer(), "n_queries must be square number"
+        hw = int(n_queries ** 0.5)
 
-class CAbstractor(nn.Module):
-    """Base projector class"""
+        # RegBlock = ResBlock + SE
+        RegBlock = partial(
+            RegStage,
+            stride=1,
+            dilation=1,
+            act_layer=nn.SiLU,
+            norm_layer=LayerNorm2d,
+        )
 
-    def __init__(
-        self,
-        encoder_hidden_size: int,
-        output_hidden_size: int,
-    ):
-        super().__init__()
-        self.encoder_hidden_size = encoder_hidden_size
-        self.hidden_size = 1024
-        self.output_hidden_size = output_hidden_size
+        s1 = RegBlock(
+            depth,
+            encoder_hidden_size,
+            hidden_size,
+        )
+        sampler = nn.AdaptiveAvgPool2d((hw, hw))
+        s2 = RegBlock(
+            depth,
+            hidden_size,
+            hidden_size,
+        )
 
-        # pos emb
-        # self.pos_emb = build_pos_embeds(num_input_tokens, encoder_hidden_size)
-        self.pos_emb = None
-
-        self.downsamples = nn.Conv2d(
-                    encoder_hidden_size,
-                    self.hidden_size,
-                    kernel_size=3,
-                    stride=2,
-                    padding=1,
-                    bias=False,
-                )
-        
-        self.readout = nn.Sequential(nn.Linear(self.hidden_size, output_hidden_size), nn.GELU(), nn.Linear(output_hidden_size, output_hidden_size))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        dtype = x.dtype
-        x = x.to(torch.float32)
-
-        hw = int(x.size(1) ** 0.5)
-        x = rearrange(x, "b (h w) d -> b d h w", h=hw, w=hw)
-        x = self.downsamples(x)
-        x = rearrange(x, "b d h w -> b (h w) d")
-        x = self.readout(x)
-
-        return x.to(dtype)
-
-
-
-
-# class CAbstractor(ConvProjector):
-#     """C-Abstractor"""
-#     def build_net(self):
-#         encoder_hidden_size = self.encoder_hidden_size
-#         hidden_size = self.hidden_size
-#         output_hidden_size = self.output_hidden_size
-#         depth = 3
-#         mlp_depth = 2
-
-#         n_queries = self.num_queries
-#         assert (n_queries ** 0.5).is_integer(), "n_queries must be square number"
-#         hw = int(n_queries ** 0.5)
-
-#         # RegBlock = ResBlock + SE
-#         RegBlock = partial(
-#             RegStage,
-#             stride=1,
-#             dilation=1,
-#             act_layer=nn.SiLU,
-#             norm_layer=LayerNorm2d,
-#         )
-
-#         s1 = RegBlock(
-#             depth,
-#             encoder_hidden_size,
-#             hidden_size,
-#         )
-#         sampler = nn.AdaptiveAvgPool2d((hw, hw))
-#         s2 = RegBlock(
-#             depth,
-#             hidden_size,
-#             hidden_size,
-#         )
-
-#         self.net = nn.Sequential(s1, sampler, s2)
-#         self.readout = build_mlp(mlp_depth, hidden_size, output_hidden_size)
+        self.net = nn.Sequential(s1, sampler, s2)
+        self.readout = build_mlp(mlp_depth, hidden_size, output_hidden_size)

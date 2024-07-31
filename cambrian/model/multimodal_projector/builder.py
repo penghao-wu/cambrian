@@ -56,6 +56,9 @@ def build_vision_projector(config, delay_load=False, **kwargs):
 
     if projector_type == 'linear':
         return nn.Linear(config.mm_hidden_size, config.hidden_size)
+    
+    if projector_type == "cabstractor":
+        return CAbstractor(config.mm_hidden_size, 576, config.image_token_len, config.hidden_size)
 
     mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', projector_type)
     if mlp_gelu_match:
