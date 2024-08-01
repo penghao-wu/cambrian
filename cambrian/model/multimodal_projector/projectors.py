@@ -5,7 +5,7 @@ import torch.nn as nn
 from einops import rearrange
 from timm.layers import LayerNorm, LayerNorm2d
 from timm.models.regnet import RegStage
-
+import torch.nn.functional as F
 
 
 
