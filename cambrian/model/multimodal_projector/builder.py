@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import re
 
-from .projectors import CAbstractor
+from .projectors import CAbstractor, LDPNetV2Projector
 class IdentityMap(nn.Module):
     def __init__(self):
         super().__init__()
@@ -59,6 +59,9 @@ def build_vision_projector(config, delay_load=False, **kwargs):
     
     if projector_type == "cabstractor":
         return CAbstractor(config.mm_hidden_size, 576, config.image_token_len, config.hidden_size)
+    
+    if projector_type == "ldpnet":
+        return LDPNetV2Projector(config)
 
     mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', projector_type)
     if mlp_gelu_match:
