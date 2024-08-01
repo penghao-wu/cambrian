@@ -14,10 +14,10 @@ python cambrian/train/train_tpu.py \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --pretrain_mm_mlp_adapter ./cambrian_7b_CLIP_mlp_36_shareGPT4V_pretrain/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
-    --vision_tower_aux_token_len_list '[576]' \
+    --vision_tower_aux_token_len_list '[36]' \
     --image_token_len 36 \
     --num_query_group 1 \
-    --query_num_list '[576]' \
+    --query_num_list '[36]' \
     --connector_depth 3 \
     --image_position 35 \
     --vision_hidden_size 1024 \
