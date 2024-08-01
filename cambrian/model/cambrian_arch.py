@@ -408,7 +408,6 @@ class CambrianMetaForCausalLM(ABC):
 
         image_features = torch.cat(final_image_features_list, -1)
         image_features = self.get_model().mm_projector(image_features).to(dtype)
-        assert False, image_features.shape
 
         if IS_XLA_AVAILABLE:
             image_features = image_features.view(image_features.shape[0], final_height, final_width, -1)
