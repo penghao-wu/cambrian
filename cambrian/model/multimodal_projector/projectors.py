@@ -143,6 +143,57 @@ class TokenDownLayer(nn.Module):
         x = F.interpolate(x.float(), size=self.output_size, mode='bilinear', align_corners=False).to(dtype=x.dtype).contiguous()
         x = x.flatten(2).transpose(1, 2).contiguous()
         return x
+    
+
+class GroupedConv2d(nn.Module):
+    def __init__(self, in_dim, out_dim, kernel_size, stride=1, padding=0, groups=1, bias=True):
+        super(GroupedConv2d, self).__init__()
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.groups = groups
+        self.bias = bias
+        
+        self.group_in_dim = in_dim // groups
+        self.group_out_dim = out_dim // groups
+        
+        # Create the linear layers for each group
+        self.linears = nn.ModuleList([
+            nn.Linear(self.group_in_dim * kernel_size * kernel_size, self.group_out_dim, bias=bias)
+            for _ in range(groups)
+        ])
+        
+    def forward(self, x):
+        batch_size, in_dim, height, width = x.shape
+        
+        # Add padding
+        x = F.pad(x, (self.padding, self.padding, self.padding, self.padding))
+        
+        # Unfold the input tensor to get sliding local blocks
+        x_unfolded = F.unfold(x, kernel_size=(self.kernel_size, self.kernel_size), stride=self.stride)
+        
+        # Reshape to separate out the groups
+        x_unfolded = x_unfolded.view(batch_size, self.groups, self.group_in_dim, self.kernel_size * self.kernel_size, -1)
+        x_unfolded = x_unfolded.permute(0, 1, 4, 2, 3).contiguous()
+        x_unfolded = x_unfolded.view(batch_size * self.groups, -1, self.group_in_dim * self.kernel_size * self.kernel_size)
+        
+        # Apply the linear layers to each group
+        outputs = []
+        for i in range(self.groups):
+            output = self.linears[i](x_unfolded[i::self.groups])
+            outputs.append(output)
+        
+        # Concatenate the outputs
+        out = torch.cat(outputs, dim=1)
+        
+        # Reshape back to image dimensions
+        out_height = (height + 2 * self.padding - self.kernel_size) // self.stride + 1
+        out_width = (width + 2 * self.padding - self.kernel_size) // self.stride + 1
+        out = out.view(batch_size, self.out_dim, out_height, out_width)
+        
+        return out
 
 
 class PosInjectLayer(nn.Module):
@@ -150,7 +201,8 @@ class PosInjectLayer(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, stride: int = 1) -> None:
         super().__init__()
         self.peg = nn.Sequential(
-            nn.Conv2d(in_dim, out_dim, 3, stride, 1, bias=True, groups=out_dim)
+            # nn.Conv2d(in_dim, out_dim, 3, stride, 1, bias=True, groups=out_dim)
+            GroupedConv2d(in_dim, out_dim, 3, stride=stride, padding=1, groups=out_dim, bias=True)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
