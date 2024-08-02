@@ -44,8 +44,8 @@ class Projector(nn.Module):
         self.output_hidden_size = output_hidden_size
 
         # pos emb
-        self.pos_emb = build_pos_embeds(num_input_tokens, encoder_hidden_size)
-        # self.pos_emb = None
+        # self.pos_emb = build_pos_embeds(num_input_tokens, encoder_hidden_size)
+        self.pos_emb = None
 
         self.build_net()
 
