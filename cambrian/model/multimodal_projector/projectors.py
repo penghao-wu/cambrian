@@ -200,10 +200,11 @@ class PosInjectLayer(nn.Module):
     # https://github.com/Meituan-AutoML/Twins/blob/main/gvt.py
     def __init__(self, in_dim: int, out_dim: int, stride: int = 1) -> None:
         super().__init__()
-        self.peg = nn.Sequential(
-            nn.Conv2d(in_dim, out_dim, 3, stride, 1, bias=True)
-            # GroupedConv2d(in_dim, out_dim, 3, stride=stride, padding=1, groups=out_dim, bias=True)
-        )
+        # self.peg = nn.Sequential(
+        #     nn.Conv2d(in_dim, out_dim, 3, stride, 1, bias=True, groups=out_dim)
+        #     # GroupedConv2d(in_dim, out_dim, 3, stride=stride, padding=1, groups=out_dim, bias=True)
+        # )
+        self.peg = nn.Conv2d(in_dim, out_dim, 3, stride, 1, bias=True, groups=out_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         b, num_tokens, c = x.shape
