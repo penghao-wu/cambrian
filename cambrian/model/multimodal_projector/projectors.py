@@ -180,4 +180,5 @@ class LDPNetV2Projector(nn.Module):
         x = self.mlp(x)
         x = self.dwn(x)
         x = self.peg(x)
+        assert False, x.shape
         return x
