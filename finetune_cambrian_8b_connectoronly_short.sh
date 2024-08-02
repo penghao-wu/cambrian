@@ -14,7 +14,7 @@ python cambrian/train/train_tpu.py \
     --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --pretrain_mm_mlp_adapter ./llava-llama3-8b-crossatt-ln-4tower-SigClipConvDino-3query24-depth3-LLM0-10-3-2.5m-pretrain-bs512-lr1e4/mm_projector.bin \
-    --vision_tower_aux_list '["siglip/CLIP-ViT-SO400M-14-384", "openai/clip-vit-large-patch14-336", "facebook/dinov2-large-res518", "clip-convnext-XXL-multi-stage"]' \
+    --vision_tower_aux_list '["siglip/CLIP-ViT-SO400M-14-384", "openai/clip-vit-large-patch14-336", "facebook/dinov2-giant-res378", "clip-convnext-XXL-multi-stage"]' \
     --vision_tower_aux_token_len_list '[576, 576, 576, 9216]' \
     --image_token_len 576 \
     --num_query_group 3 \
