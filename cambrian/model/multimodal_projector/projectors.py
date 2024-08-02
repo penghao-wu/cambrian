@@ -201,8 +201,8 @@ class PosInjectLayer(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, stride: int = 1) -> None:
         super().__init__()
         self.peg = nn.Sequential(
-            # nn.Conv2d(in_dim, out_dim, 3, stride, 1, bias=True, groups=out_dim)
-            GroupedConv2d(in_dim, out_dim, 3, stride=stride, padding=1, groups=out_dim, bias=True)
+            nn.Conv2d(in_dim, out_dim, 3, stride, 1, bias=True)
+            # GroupedConv2d(in_dim, out_dim, 3, stride=stride, padding=1, groups=out_dim, bias=True)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
