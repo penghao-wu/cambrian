@@ -13,7 +13,7 @@ python cambrian/train/train_tpu.py \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./cambrian-connectoronly-4tower_8b-pretrain-pretrain_1.2m/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./cambrian-connectoronly-D5-G1-2tower_7b-pretrain_1.2m/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336", "clip-convnext-L-multi-stage"]' \
     --vision_tower_aux_token_len_list '[576, 9216]' \
     --image_token_len 576 \
