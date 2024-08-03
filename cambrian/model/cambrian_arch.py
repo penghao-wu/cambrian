@@ -181,7 +181,6 @@ class CambrianMetaModel:
 
         if pretrain_mm_mlp_adapter is not None:
             mm_projector_weights = torch.load(pretrain_mm_mlp_adapter, map_location='cpu')
-            assert False, (pretrain_mm_mlp_adapter, mm_projector_weights['model.mm_projector.0.weight'].shape)
             def get_w(weights, keyword):
                 return {k.split(keyword + '.')[1]: v for k, v in weights.items() if keyword+'.' in k}
 
