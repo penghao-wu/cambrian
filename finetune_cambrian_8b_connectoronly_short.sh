@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian-connectoronly-4tower_8b_25pt_finetune_737k" &&
+export CKPT_NAME="cambrian-connectoronly-4tower_8b_12pt_finetune_737k" &&
 
 export CKPT_DIR="gs://us-central2-storage/cambrian/checkpoints/$CKPT_NAME" &&
 
@@ -13,7 +13,7 @@ python cambrian/train/train_tpu.py \
     --version llama_v3 \
     --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./llava-llama3-8b-crossatt-ln-4tower-SigClipConvDino-3query24-depth3-LLM0-10-3-2.5m-pretrain-bs512-lr1e4/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./cambrian-connectoronly-4tower_8b-pretrain-pretrain_1.2m/mm_projector.bin \
     --vision_tower_aux_list '["siglip/CLIP-ViT-SO400M-14-384", "openai/clip-vit-large-patch14-336", "facebook/dinov2-giant-res378", "clip-convnext-XXL-multi-stage"]' \
     --vision_tower_aux_token_len_list '[576, 576, 576, 9216]' \
     --image_token_len 576 \
