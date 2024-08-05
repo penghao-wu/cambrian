@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_8b_CLIP_mlp_576_25_pretrain" &&
+export CKPT_NAME="cambrian_8b_CLIP_mlp_576_25m_pretrain" &&
 
 export CKPT_DIR="gs://us-central2-storage/cambrian/checkpoints/$CKPT_NAME" &&
 
