@@ -112,6 +112,11 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
 
+        image_token_start_idx = self.config.image_position
+        image_token_len = self.config.image_token_len
+        image_attention_mask = attention_mask[:, image_token_start_idx:image_token_start_idx+image_token_len]
+        image_attention_mask = image_attention_mask.view(-1, 1, 1, image_token_len).repeat(1, 1, image_token_len, 1)
+
         self._use_flash_attention_2 = getattr(self, '_use_flash_attention_2', False)
         self._use_sdpa = getattr(self, '_use_sdpa', True)
         if self._use_flash_attention_2:
@@ -131,6 +136,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
             attention_mask = _prepare_4d_causal_attention_mask(
                 attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
             )
+
+        attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len, image_token_start_idx:image_token_start_idx+image_token_len] = image_attention_mask
 
         # embed positions
         hidden_states = inputs_embeds
