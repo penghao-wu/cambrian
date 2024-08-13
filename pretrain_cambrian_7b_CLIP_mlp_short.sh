@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export CKPT_NAME="cambrian_7b_CLIP_mlp_36_im_nocausal_shareGPT4V_pretrain" &&
 
-export CKPT_DIR="gs://us-central2-storage/cambrian/checkpoints/$CKPT_NAME" &&
+export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
     --model_name_or_path lmsys/vicuna-7b-v1.5 \
@@ -64,5 +64,5 @@ if [ ! -d "$CKPT_PATH" ]; then
     exit 1
 fi
 echo "Training finished. Syncing checkpoints to GCS..."
-gcloud alpha storage rsync $CKPT_PATH gs://us-central2-storage/cambrian/checkpoints/$CKPT_NAME
-echo "Syncing finished. Checkpoints are now available at gs://us-central2-storage/cambrian/checkpoints/$CKPT_NAME"
+gcloud alpha storage rsync $CKPT_PATH gs://cambrian-archive/checkpoints/$CKPT_NAME
+echo "Syncing finished. Checkpoints are now available at gs://cambrian-archive/checkpoints/$CKPT_NAME"
