@@ -114,8 +114,10 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 		image_token_start_idx = self.config.image_position
 		image_token_len = self.config.image_token_len
-		image_attention_mask_binary = attention_mask[:, image_token_start_idx:image_token_start_idx+image_token_len]
-		image_attention_mask_binary = image_attention_mask_binary.view(-1, 1, 1, image_token_len).repeat(1, 1, image_token_len, 1)
+		image_token_len_per_side = int(image_token_len**0.5)
+		image_token_len_newline = image_token_len + image_token_len_per_side
+		image_attention_mask_binary = attention_mask[:, image_token_start_idx:image_token_start_idx+image_token_len_newline]
+		image_attention_mask_binary = image_attention_mask_binary.view(-1, 1, 1, image_token_len_newline).repeat(1, 1, image_token_len_newline, 1)
 		image_attention_mask = torch.zeros_like(image_attention_mask_binary)
 		min_dtype = torch.finfo(inputs_embeds.dtype).min
 		image_attention_mask = image_attention_mask.masked_fill(image_attention_mask_binary.eq(0.0), min_dtype)
@@ -140,7 +142,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
 			)
 
-		# attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len, image_token_start_idx:image_token_start_idx+image_token_len] = image_attention_mask
+		attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, image_token_start_idx:image_token_start_idx+image_token_len_newline] = image_attention_mask
 
 		# embed positions
 		hidden_states = inputs_embeds
