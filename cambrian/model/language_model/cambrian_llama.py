@@ -142,7 +142,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
 			)
 
-		# attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, image_token_start_idx:image_token_start_idx+image_token_len_newline] = image_attention_mask
+		attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, image_token_start_idx:image_token_start_idx+image_token_len_newline] = image_attention_mask
 
 		# embed positions
 		hidden_states = inputs_embeds
