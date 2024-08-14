@@ -1084,6 +1084,13 @@ def prepare_image_info(image_size, image_token_len, newline=False):
     position_ids = attention_mask.cumsum(0)-1
     return attention_mask, position_ids
 
+def combine_causal_attention_mask(seq_len, attention_mask, dtype=torch.bfloat16):
+	causal_mask = torch.full((1, seq_len, seq_len), fill_value=1)
+	min_dtype = torch.finfo(dtype).min
+	causal_mask = torch.triu(causal_mask, diagonal=1).to(dtype=dtype)*min_dtype
+	padding_mask = causal_mask.eq(0.0) * attention_mask[None, None, :].eq(0.0)
+	causal_mask = causal_mask.masked_fill(padding_mask, min_dtype)
+	return causal_mask
     
 
 def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len=576, image_aux_token_len_list=[192*192], max_length=2048):
@@ -1154,10 +1161,22 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
         image_token_index = image_token_indices[1]
         image_token_end_index = image_token_index + image_token_len_with_newline
+        first_answer_index = len(cur_labels_im_replaced)-1
         for index_i in range(image_token_end_index, len(cur_labels_im_replaced)):
             if cur_labels_im_replaced[index_i] != IGNORE_INDEX:
-                assert False, cur_input_ids_im_replaced[index_i-5:index_i]
+                first_answer_index = index_i
+                break
+        
+        cur_attention_mask_im_part = cur_attention_mask_im_replaced[image_token_index:first_answer_index]
+        cur_attention_mask_im_part_binary = cur_attention_mask_im_part.view(1, 1, -1).repeat(1, 1, image_token_len_with_newline, 1)
+        cur_attention_mask_im_part = torch.zeros_like(cur_attention_mask_im_part_binary)
+        min_dtype = torch.finfo(torch.bfloat16).min
+        cur_attention_mask_im_part = cur_attention_mask_im_part.masked_fill(cur_attention_mask_im_part_binary.eq(0.0), min_dtype)
 
+        cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
+        cur_attention_mask_im_replaced[:, image_token_index:image_token_end_index, image_token_index:first_answer_index] = cur_attention_mask_im_part
+        assert False, cur_attention_mask_im_replaced.shape
+        
         input_ids_im_replaced.append(cur_input_ids_im_replaced)
         labels_im_replaced.append(cur_labels_im_replaced)
         attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
@@ -1168,7 +1187,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     # Truncate sequences to max length as image embeddings can make the sequence longer
     new_input_ids = [x[0:max_length] for x in input_ids_im_replaced]
     new_labels = [x[0:max_length] for x in labels_im_replaced]
-    new_attention_mask = [x[0:max_length] for x in attention_mask_im_replaced]
+    # new_attention_mask = [x[0:max_length] for x in attention_mask_im_replaced]
+    new_attention_mask = [x[:, 0:max_length, 0:max_length] for x in attention_mask_im_replaced]
     new_position_ids = [x[0:max_length] for x in position_ids_im_replaced]
     new_input_ids = torch.stack(new_input_ids)
     new_labels = torch.stack(new_labels)
