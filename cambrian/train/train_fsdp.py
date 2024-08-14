@@ -1175,7 +1175,6 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
         cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
         cur_attention_mask_im_replaced[:, image_token_index:image_token_end_index, image_token_index:first_answer_index] = cur_attention_mask_im_part
-        assert False, cur_attention_mask_im_replaced.shape
         
         input_ids_im_replaced.append(cur_input_ids_im_replaced)
         labels_im_replaced.append(cur_labels_im_replaced)
