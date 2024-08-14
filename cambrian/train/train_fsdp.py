@@ -1147,10 +1147,23 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
                     cur_attention_mask_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_attention_mask.device, dtype=cur_attention_mask.dtype))
                     cur_position_ids_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_input_ids.device, dtype=torch.long))
         
-        input_ids_im_replaced.append(torch.cat(cur_input_ids_im_replaced))
-        labels_im_replaced.append(torch.cat(cur_labels_im_replaced))
-        attention_mask_im_replaced.append(torch.cat(cur_attention_mask_im_replaced))
-        position_ids_im_replaced.append(torch.cat(cur_position_ids_im_replaced))
+        cur_input_ids_im_replaced = torch.cat(cur_input_ids_im_replaced)
+        cur_labels_im_replaced = torch.cat(cur_labels_im_replaced)
+        cur_attention_mask_im_replaced = torch.cat(cur_attention_mask_im_replaced)
+        cur_position_ids_im_replaced = torch.cat(cur_position_ids_im_replaced)
+
+        image_token_index = image_token_indices[1]
+        image_token_end_index = image_token_index + image_token_len_with_newline
+        for index_i in range(image_token_end_index, len(cur_labels_im_replaced)):
+            if cur_labels_im_replaced[index_i] != IGNORE_INDEX:
+                assert False, cur_input_ids_im_replaced[index_i-5:index_i]
+
+        input_ids_im_replaced.append(cur_input_ids_im_replaced)
+        labels_im_replaced.append(cur_labels_im_replaced)
+        attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
+        position_ids_im_replaced.append(cur_position_ids_im_replaced)
+
+
     
     # Truncate sequences to max length as image embeddings can make the sequence longer
     new_input_ids = [x[0:max_length] for x in input_ids_im_replaced]
