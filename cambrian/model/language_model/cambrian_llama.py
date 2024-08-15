@@ -200,6 +200,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 						bs = latent_query.shape[0]
 						latent_query = latent_query.view(bs*latent_query_num, 1, -1)
 						gist_tokens = hidden_states[:, gist_token_positions].clone().contiguous()
+						gist_tokens = gist_tokens.view(bs, 1, 1, -1).repeat(1, latent_query_num, 1, 1).flatten(0, 1)
 						if self.gradient_checkpointing and self.training:
 							latent_query = self._gradient_checkpointing_func(
 							self.vision_sampler_layers[(i-cross_layers_start_idx)//cross_index_step].__call__,
