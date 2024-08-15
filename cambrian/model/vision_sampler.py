@@ -246,13 +246,17 @@ class MLP(nn.Module):
 
 
 class VisionCrossAttentionLayer(nn.Module):
-    def __init__(self, q_dim, context_dim, kv_dim_list, kv_size_list, hidden_dim = 1024, layer_idx=0):
+    def __init__(self, q_dim, context_dim, kv_dim_list, kv_size_list, hidden_dim = 1024, layer_idx=0, gist_token=False):
         super().__init__()
         num_heads = 16
         self.num_of_kvs = len(kv_dim_list)
 
         self.proj_context = nn.Linear(context_dim, hidden_dim, bias=False)
-        self.proj_in = nn.Linear(q_dim+hidden_dim, hidden_dim, bias=False)
+        if gist_token:
+            self.proj_gist = nn.Linear(q_dim, hidden_dim, bias=False)
+            self.proj_in = nn.Linear(q_dim+hidden_dim*2, hidden_dim, bias=False)
+        else:
+            self.proj_in = nn.Linear(q_dim+hidden_dim, hidden_dim, bias=False)
         # if self.num_of_kvs > 1:
         #     self.weight_mlp = MLP(q_dim+hidden_dim, hidden_dim, self.num_of_kvs)
         #     self.tower_weight = nn.Parameter(torch.zeros((self.num_of_kvs)))
@@ -271,14 +275,19 @@ class VisionCrossAttentionLayer(nn.Module):
         self,
         queries,
         context_feature,
+        gist_token=None,
         *vision_latents_attention_mask_list,
     ) -> torch.FloatTensor:
 
         residual = queries
         # queries = self.proj_in(queries)
         context_feature = self.proj_context(context_feature)
-        # queries = queries + context_feature
-        queries = torch.cat([queries, context_feature], -1)
+        if gist_token is not None:
+            gist_token = self.proj_gist(gist_token)
+            queries = torch.cat([queries, context_feature, gist_token], -1)
+        else:
+            # queries = queries + context_feature
+            queries = torch.cat([queries, context_feature], -1)
 
         # if self.num_of_kvs > 1:
         #     kv_weight = self.weight_mlp(queries) # B * 1 * num_tower
@@ -405,11 +414,11 @@ class VisionAggregationLayer(nn.Module):
         return queries
 
 class VisionTokenSampler(nn.Module):
-    def __init__(self, q_dim, context_dim, kv_dim_list, kv_size_list, vision_hidden_size, num_of_layers=1, layer_type="joint"):
+    def __init__(self, q_dim, context_dim, kv_dim_list, kv_size_list, vision_hidden_size, num_of_layers=1, gist_token=False, layer_type="joint"):
         super().__init__()
         assert layer_type in ['joint', 'sep']
         if layer_type == 'joint':
-            self.layers = nn.ModuleList([VisionCrossAttentionLayer(q_dim, context_dim, kv_dim_list, kv_size_list, vision_hidden_size, idx) for idx in range(num_of_layers)])
+            self.layers = nn.ModuleList([VisionCrossAttentionLayer(q_dim, context_dim, kv_dim_list, kv_size_list, vision_hidden_size, idx, gist_token) for idx in range(num_of_layers)])
         else:
             self.layers = nn.ModuleList([VisionAggregationLayer(q_dim, context_dim, kv_dim_list, kv_size_list, vision_hidden_size, idx) for idx in range(num_of_layers)])
 

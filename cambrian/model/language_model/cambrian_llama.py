@@ -69,6 +69,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		vision_tower_aux_attention_masks_list: Optional[List[torch.Tensor]] = None,
 		final_vision_feature_size: Optional[List[tuple]] = None,
 		global_context_feature: Optional[torch.Tensor] = None,
+		gist_token_positions: Optional[torch.LongTensor] = None,
 	) -> Union[Tuple, BaseModelOutputWithPast]:
 		output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
 		output_hidden_states = (
@@ -198,11 +199,13 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 						vision_tower_aux_feature_list = [vision_tower_aux_feature.to(latent_query.dtype) for vision_tower_aux_feature in vision_tower_aux_feature_list]
 						bs = latent_query.shape[0]
 						latent_query = latent_query.view(bs*latent_query_num, 1, -1)
+						gist_tokens = hidden_states[:, gist_token_positions].copy().contiguous()
 						if self.gradient_checkpointing and self.training:
 							latent_query = self._gradient_checkpointing_func(
 							self.vision_sampler_layers[(i-cross_layers_start_idx)//cross_index_step].__call__,
 							latent_query,
 							global_context_feature,
+							gist_tokens,
 							*vision_tower_aux_feature_list,
 							*vision_tower_aux_attention_masks_list
 							)
@@ -210,6 +213,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 							latent_query = self.vision_sampler_layers[(i-cross_layers_start_idx)//cross_index_step](
 							latent_query,
 							global_context_feature,
+							gist_tokens,
 							*vision_tower_aux_feature_list,
 							*vision_tower_aux_attention_masks_list
 							)
@@ -321,6 +325,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 		image_aux_attention_masks_list: Optional[List[torch.Tensor]] = None,
 		image_sizes: Optional[List[List[int]]] = None,
 		return_dict: Optional[bool] = None,
+		gist_token_positions: Optional[torch.LongTensor] = None,
 		cache_position = None
 	) -> Union[Tuple, CausalLMOutputWithPast]:
 
@@ -377,6 +382,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			vision_tower_aux_attention_masks_list=vision_tower_aux_attention_masks_list, 
 			final_vision_feature_size=final_vision_feature_size,
 			global_context_feature=global_context_feature,
+			gist_token_positions=gist_token_positions
 		)
 
 		# inference

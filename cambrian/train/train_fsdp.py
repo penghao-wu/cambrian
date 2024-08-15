@@ -1098,6 +1098,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     labels_im_replaced = []
     attention_mask_im_replaced = []
     position_ids_im_replaced = []
+    gist_token_positions = []
     im_aux_attention_masks_list = [[] for _ in range(len(image_aux_token_len_list))]
     base_image_token_len_per_side = int(image_token_len**0.5)
     image_aux_token_len_per_side_list = [int(image_aux_token_len_per_side**0.5) for image_aux_token_len_per_side in image_aux_token_len_list]
@@ -1166,7 +1167,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
             if cur_labels_im_replaced[index_i] != IGNORE_INDEX:
                 first_answer_index = index_i
                 break
-        
+        gist_token_positions.append(first_answer_index)
         # cur_attention_mask_im_part = cur_attention_mask_im_replaced[image_token_index:first_answer_index]
         # cur_attention_mask_im_part_binary = cur_attention_mask_im_part.view(1, 1, -1).repeat(1, image_token_len_with_newline, 1)
         # cur_attention_mask_im_part = torch.zeros_like(cur_attention_mask_im_part_binary)
@@ -1194,7 +1195,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     new_attention_mask = torch.stack(new_attention_mask)
     new_position_ids = torch.stack(new_position_ids)
     im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
-    return new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list
+    gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.LongTensor)
+    return new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions
 
 
 @dataclass
@@ -1248,13 +1250,14 @@ class DataCollatorForSupervisedDataset(object):
                 cur_attention_mask_tmp[image_position] = False
                 attention_mask[i] = cur_attention_mask_tmp
         image_sizes = [instance['image_size'] for instance in instances]
-        new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
+        new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
         batch = dict(
             input_ids=new_input_ids,
             labels=new_labels,
             attention_mask=new_attention_mask,
             position_ids=new_position_ids,
-            image_aux_attention_masks_list=im_aux_attention_masks_list
+            image_aux_attention_masks_list=im_aux_attention_masks_list,
+            gist_token_positions=gist_token_positions
         )
 
         if 'image_aux_list' in instances[0]:
