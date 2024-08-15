@@ -1165,6 +1165,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
         for index_i in range(image_token_end_index, len(cur_labels_im_replaced)):
             if cur_labels_im_replaced[index_i] != IGNORE_INDEX:
                 first_answer_index = index_i
+                assert False, cur_input_ids_im_replaced[first_answer_index]
                 break
         
         cur_attention_mask_im_part = cur_attention_mask_im_replaced[image_token_index:first_answer_index]
