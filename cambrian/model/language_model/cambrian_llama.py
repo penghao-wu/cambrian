@@ -200,7 +200,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 						bs = latent_query.shape[0]
 						latent_query = latent_query.view(bs*latent_query_num, 1, -1)
 						gist_token_positions_expand = gist_token_positions.view(bs, 1, 1).repeat(1, 1, latent_query.shape[-1])
-						gist_tokens = torch.gather(hidden_states, 1, gist_token_positions_expand.clone()).clone().contiguous()
+						gist_tokens = torch.gather(hidden_states.clone(), 1, gist_token_positions_expand).contiguous()
 						gist_tokens = gist_tokens.view(bs, 1, 1, -1).repeat(1, latent_query_num, 1, 1).flatten(0, 1)
 						if self.gradient_checkpointing and self.training:
 							latent_query = self._gradient_checkpointing_func(
