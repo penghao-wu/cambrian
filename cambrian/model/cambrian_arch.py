@@ -388,7 +388,7 @@ class CambrianMetaForCausalLM(ABC):
                     vision_tower_aux_feature_list_i, vision_tower_aux_attention_masks_list_i = self.rearrange_vision_tower_features_inference(vision_tower_aux_feature_list, query_side_len,
                         image_sizes)
 
-                query_features_i = getattr(self.get_model(), "vision_sampler_{}".format(query_group_i))(query_features_i.flatten(0,1), global_context_feature_i, *vision_tower_aux_feature_list_i, *vision_tower_aux_attention_masks_list_i)
+                query_features_i = getattr(self.get_model(), "vision_sampler_{}".format(query_group_i))(query_features_i.flatten(0,1), global_context_feature_i, None, *vision_tower_aux_feature_list_i, *vision_tower_aux_attention_masks_list_i)
                 query_features_i = query_features_i.view(bs, query_num, -1)
                 # interpolate to the final target size
                 if query_side_len != final_height:
