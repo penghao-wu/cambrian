@@ -1165,17 +1165,16 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
         for index_i in range(image_token_end_index, len(cur_labels_im_replaced)):
             if cur_labels_im_replaced[index_i] != IGNORE_INDEX:
                 first_answer_index = index_i
-                assert False, cur_input_ids_im_replaced[first_answer_index-5 : first_answer_index]
                 break
         
-        cur_attention_mask_im_part = cur_attention_mask_im_replaced[image_token_index:first_answer_index]
-        cur_attention_mask_im_part_binary = cur_attention_mask_im_part.view(1, 1, -1).repeat(1, image_token_len_with_newline, 1)
-        cur_attention_mask_im_part = torch.zeros_like(cur_attention_mask_im_part_binary)
-        min_dtype = torch.finfo(torch.bfloat16).min
-        cur_attention_mask_im_part = cur_attention_mask_im_part.masked_fill(cur_attention_mask_im_part_binary.eq(0.0), min_dtype)
+        # cur_attention_mask_im_part = cur_attention_mask_im_replaced[image_token_index:first_answer_index]
+        # cur_attention_mask_im_part_binary = cur_attention_mask_im_part.view(1, 1, -1).repeat(1, image_token_len_with_newline, 1)
+        # cur_attention_mask_im_part = torch.zeros_like(cur_attention_mask_im_part_binary)
+        # min_dtype = torch.finfo(torch.bfloat16).min
+        # cur_attention_mask_im_part = cur_attention_mask_im_part.masked_fill(cur_attention_mask_im_part_binary.eq(0.0), min_dtype)
 
         cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
-        cur_attention_mask_im_replaced[:, image_token_index:image_token_end_index, image_token_index:first_answer_index] = cur_attention_mask_im_part
+        cur_attention_mask_im_replaced[:, image_token_index:image_token_end_index, first_answer_index-1:first_answer_index] = 0
         
         input_ids_im_replaced.append(cur_input_ids_im_replaced)
         labels_im_replaced.append(cur_labels_im_replaced)
