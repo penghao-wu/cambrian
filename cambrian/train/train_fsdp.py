@@ -1195,7 +1195,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     new_attention_mask = torch.stack(new_attention_mask)
     new_position_ids = torch.stack(new_position_ids)
     im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
-    gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.LongTensor)
+    gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
     return new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions
 
 
