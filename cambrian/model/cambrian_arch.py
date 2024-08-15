@@ -155,7 +155,7 @@ class CambrianMetaModel:
                     self.config.stride_of_vision_sampler_layers = model_args.stride_of_vision_sampler_layers
                     cross_att_token_len_list = [int(vision_tower_aux_token_len**0.5) // int(image_token_len**0.5) for vision_tower_aux_token_len in vision_tower_aux_token_len_list]
                     self.vision_sampler_layers = nn.ModuleList(
-                    [VisionTokenSampler(self.config.hidden_size, vision_hidden_size, [vision_hidden_size]*len(vision_tower_aux_list), cross_att_token_len_list, vision_hidden_size, 1, gist_token=True) for layer_idx in range(0, num_of_vision_sampler_layers)]
+                    [VisionTokenSampler(self.config.hidden_size, vision_hidden_size, [vision_hidden_size]*len(vision_tower_aux_list), cross_att_token_len_list, vision_hidden_size, 1, gist_token=False) for layer_idx in range(0, num_of_vision_sampler_layers)]
                     )
                 vision_embed_std = 1 / torch.sqrt(torch.tensor(self.config.hidden_size, dtype=self.dtype))
                 self.vision_query = nn.Parameter(
