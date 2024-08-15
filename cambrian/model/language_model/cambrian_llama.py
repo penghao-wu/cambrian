@@ -199,7 +199,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 						vision_tower_aux_feature_list = [vision_tower_aux_feature.to(latent_query.dtype) for vision_tower_aux_feature in vision_tower_aux_feature_list]
 						bs = latent_query.shape[0]
 						latent_query = latent_query.view(bs*latent_query_num, 1, -1)
-						gist_tokens = hidden_states[:, gist_token_positions].clone().contiguous()
+						gist_token_positions = gist_token_positions.view(bs, 1, 1).repeat(1, 1, latent_query.shape[-1])
+						gist_tokens = torch.gather(hidden_states, 1, gist_token_positions).clone().contiguous()
 						gist_tokens = gist_tokens.view(bs, 1, 1, -1).repeat(1, latent_query_num, 1, 1).flatten(0, 1)
 						if self.gradient_checkpointing and self.training:
 							latent_query = self._gradient_checkpointing_func(
