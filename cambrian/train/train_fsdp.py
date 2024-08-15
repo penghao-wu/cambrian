@@ -1259,7 +1259,7 @@ class DataCollatorForSupervisedDataset(object):
             image_aux_attention_masks_list=im_aux_attention_masks_list,
             gist_token_positions=gist_token_positions
         )
-
+        assert False, gist_token_positions.shape
         if 'image_aux_list' in instances[0]:
             image_aux_list = [instance['image_aux_list'] for instance in instances]
             image_aux_list = [list(batch_image_aux) for batch_image_aux in zip(*image_aux_list)]
