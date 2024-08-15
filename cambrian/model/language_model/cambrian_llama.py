@@ -199,7 +199,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 						vision_tower_aux_feature_list = [vision_tower_aux_feature.to(latent_query.dtype) for vision_tower_aux_feature in vision_tower_aux_feature_list]
 						bs = latent_query.shape[0]
 						latent_query = latent_query.view(bs*latent_query_num, 1, -1)
-						gist_tokens = hidden_states[:, gist_token_positions].copy().contiguous()
+						gist_tokens = hidden_states[:, gist_token_positions].clone().contiguous()
 						if self.gradient_checkpointing and self.training:
 							latent_query = self._gradient_checkpointing_func(
 							self.vision_sampler_layers[(i-cross_layers_start_idx)//cross_index_step].__call__,
