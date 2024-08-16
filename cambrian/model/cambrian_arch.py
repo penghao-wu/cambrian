@@ -23,7 +23,7 @@ from ezcolorlog import root_logger as logger
 
 from .multimodal_encoder.builder import build_vision_tower_aux_list
 from .multimodal_projector.builder import build_vision_projector
-from .vision_sampler import VisionTokenSampler
+from .vision_sampler import VisionTokenSampler, VisionMLP
 
 from cambrian.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
@@ -83,6 +83,10 @@ class CambrianMetaModel:
                 self.mm_projector = build_vision_projector(config)
                 self.image_newline = nn.Parameter(
                         torch.empty(config.hidden_size, dtype=self.dtype)
+                    )
+                
+                self.vision_sampler_layers = nn.ModuleList(
+                    [VisionMLP(config) for layer_idx in range(0, config.num_hidden_layers)]
                     )
 
     # def get_vision_tower(self):
