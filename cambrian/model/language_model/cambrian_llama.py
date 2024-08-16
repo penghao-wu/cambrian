@@ -152,6 +152,11 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		all_self_attns = () if output_attentions else None
 		next_decoder_cache = None
 
+		latent_query_start_idx = self.config.image_position
+		image_token_len_per_side = int(self.config.image_token_len**0.5)
+		latent_query_newline_num = self.config.image_token_len + image_token_len_per_side
+		vision_tokens = hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :].clone()
+
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
@@ -177,6 +182,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				)
 
 			hidden_states = layer_outputs[0]
+
+			hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :] = vision_tokens
 
 			if not self.config.connector_only:
 
