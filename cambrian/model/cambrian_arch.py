@@ -178,6 +178,9 @@ class CambrianMetaModel:
                 self.image_newline = nn.Parameter(
                     torch.randn(self.config.hidden_size, dtype=self.dtype) * embed_std
                 )
+                self.vision_sampler_layers = nn.ModuleList(
+                    [VisionMLP(self.config) for layer_idx in range(0, self.config.num_hidden_layers)]
+                    )
         else:
             # In case it is frozen by LoRA
             for p in self.mm_projector.parameters():
@@ -201,6 +204,7 @@ class CambrianMetaModel:
                     self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
                 self.vision_query.data = mm_projector_weights['model.vision_query']
             self.image_newline.data = mm_projector_weights['model.image_newline']
+            self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
 
 
 def unmask_attention_mask(mask, original_size):
