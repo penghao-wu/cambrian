@@ -439,4 +439,4 @@ class VisionMLP(nn.Module):
 		)
 		self.layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 	def forward(self, x):
-		return self.layernorm(self.proj(x)+x)
+		return self.layernorm(self.proj(x))+x
