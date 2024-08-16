@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_36_img_mlpres_shareGPT4V_pretrain" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_36_img_mlpres_lr1e3_shareGPT4V_pretrain" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -25,7 +25,7 @@ python cambrian/train/train_tpu.py \
     --start_of_vision_sampler_layers 0 \
     --stride_of_vision_sampler_layers 3 \
     --mm_projector_type mlp2x_gelu \
-    --mm_vision_sampler_lr 1e-4 \
+    --mm_vision_sampler_lr 1e-3 \
     --tune_mm_mlp_adapter True \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
