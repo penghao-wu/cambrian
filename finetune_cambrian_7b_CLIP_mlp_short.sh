@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_36_im_nocausal_finetune_737k" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_36_img_const_finetune_737k" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -12,7 +12,7 @@ python cambrian/train/train_tpu.py \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./cambrian_7b_CLIP_mlp_36_im_nocausal_shareGPT4V_pretrain/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./cambrian_7b_CLIP_mlp_36_img_const_shareGPT4V_pretrain/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[36]' \
     --image_token_len 36 \
