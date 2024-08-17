@@ -345,13 +345,13 @@ class CambrianMetaForCausalLM(ABC):
         return image_aux_features_list
 
     def prepare_inputs_labels_for_multimodal(
-        self, input_ids, position_ids, attention_mask, past_key_values, labels,
+        self, input_ids,
         images, image_aux_attention_masks_list=None, image_sizes=None
     ):
         # vision_tower = self.get_vision_tower()
         vision_tower_aux_list = self.get_model().get_vision_tower_aux_list()
         if vision_tower_aux_list is None or images is None or input_ids.shape[1] == 1:
-            return input_ids, position_ids, attention_mask, past_key_values, None, labels, None, None, None, None
+            return input_ids, position_ids, attention_mask, None, None, None, None, None, None, None
 
         image_aux_list = images
 
@@ -359,9 +359,11 @@ class CambrianMetaForCausalLM(ABC):
         dtype = image_aux_list[0].dtype
 
         image_token_len = self.get_model().config.image_token_len
+        image_token_len_concise = self.get_model().config.image_token_len_concise
         query_num_list = self.get_model().config.query_num_list
 
         final_height = final_width  = int(image_token_len**0.5)
+        final_height_concise = final_width_concise  = int(image_token_len_concise**0.5)
 
         final_image_features_list = []
 
@@ -417,13 +419,30 @@ class CambrianMetaForCausalLM(ABC):
         image_features = torch.cat(final_image_features_list, -1)
         image_features = self.get_model().mm_projector(image_features).to(dtype)
 
+        image_features_concise = F.interpolate(
+                image_features.view(bs, final_height, final_width, -1).permute(0, 3, 1, 2).contiguous().to(torch.float32),
+                size=(final_height_concise, final_width_concise),
+                mode='bilinear',
+                align_corners=False
+            ).to(image_features.dtype)
+        image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
+
         if IS_XLA_AVAILABLE:
-            image_features = image_features.view(image_features.shape[0], final_height, final_width, -1)
+            image_features = image_features.view(batch_size, final_height, final_width, -1)
             image_features = torch.cat((
                 image_features,
-                self.model.image_newline[None, None, None, :].expand(image_features.shape[0], final_height, 1, -1)
+                self.model.image_newline[None, None, None, :].expand(batch_size, final_height, 1, -1)
             ), dim=2)
             image_features = image_features.flatten(1, 2)
+
+            image_features_concise = image_features_concise.view(batch_size, final_height_concise, final_width_concise, -1)
+            image_features_concise = torch.cat((
+                image_features_concise,
+                self.model.image_newline[None, None, None, :].expand(batch_size, final_height_concise, 1, -1)
+            ), dim=2)
+            image_features_concise = image_features_concise.flatten(1, 2)
+
+
             final_size = [(final_height, final_width)]*bs
 
         else:
@@ -494,7 +513,7 @@ class CambrianMetaForCausalLM(ABC):
                 new_input_embeds.append(torch.cat(cur_input_embeds_im_replaced))
 
             new_input_embeds = torch.stack(new_input_embeds)
-            return None, position_ids, attention_mask, past_key_values, new_input_embeds, labels, vision_tower_aux_feature_list_final, vision_tower_aux_attention_masks_list_final, final_size, global_context_feature_final
+            return None, new_input_embeds, image_features_concise, vision_tower_aux_feature_list_final, vision_tower_aux_attention_masks_list_final, final_size, global_context_feature_final
 
         else:
             # Let's just add dummy tensors if they do not exist,

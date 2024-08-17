@@ -57,14 +57,19 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 	def forward(
 		self,
 		input_ids: torch.LongTensor = None,
-		attention_mask: Optional[torch.Tensor] = None,
-		position_ids: Optional[torch.LongTensor] = None,
+		attention_mask_i2i: Optional[torch.Tensor] = None,
+		attention_mask_t2i: Optional[torch.Tensor] = None,
+		position_ids_sys: Optional[torch.LongTensor] = None,
+		position_ids_vision_concise: Optional[torch.LongTensor] = None,
+		position_ids_vision_full: Optional[torch.LongTensor] = None,
+		position_ids_vision_text: Optional[torch.LongTensor] = None,
 		past_key_values: Optional[List[torch.FloatTensor]] = None,
 		inputs_embeds: Optional[torch.FloatTensor] = None,
 		use_cache: Optional[bool] = None,
 		output_attentions: Optional[bool] = None,
 		output_hidden_states: Optional[bool] = None,
 		return_dict: Optional[bool] = None,
+		inputs_embeds_vision_concise: Optional[torch.FloatTensor] = None,
 		vision_tower_aux_feature_list: Optional[List[torch.FloatTensor]] = None,
 		vision_tower_aux_attention_masks_list: Optional[List[torch.Tensor]] = None,
 		final_vision_feature_size: Optional[List[tuple]] = None,
@@ -79,226 +84,103 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 		return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-		# retrieve input_ids and inputs_embeds
-		if input_ids is not None and inputs_embeds is not None:
-			raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
-		elif input_ids is not None:
-			batch_size, seq_length = input_ids.shape[:2]
-		elif inputs_embeds is not None:
-			batch_size, seq_length = inputs_embeds.shape[:2]
-		else:
-			raise ValueError("You have to specify either input_ids or inputs_embeds")
-
-		if self.gradient_checkpointing and self.training:
-			if use_cache:
-				logger.warning_once(
-					"`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."
-				)
-				use_cache = False
-
-		past_key_values_length = 0
-		if use_cache:
-			use_legacy_cache = not isinstance(past_key_values, Cache)
-			if use_legacy_cache:
-				past_key_values = DynamicCache.from_legacy_cache(past_key_values)
-			past_key_values_length = past_key_values.get_usable_length(seq_length)
-
-		if position_ids is None:
-			device = input_ids.device if input_ids is not None else inputs_embeds.device
-			position_ids = torch.arange(
-				past_key_values_length, seq_length + past_key_values_length, dtype=torch.long, device=device
-			)
-			position_ids = position_ids.unsqueeze(0)
-
-		if inputs_embeds is None:
-			inputs_embeds = self.embed_tokens(input_ids)
-
-		# image_token_start_idx = self.config.image_position
-		# image_token_len = self.config.image_token_len
-		# image_token_len_per_side = int(image_token_len**0.5)
-		# image_token_len_newline = image_token_len + image_token_len_per_side
-		# image_attention_mask_binary = attention_mask[:, image_token_start_idx:image_token_start_idx+image_token_len_newline]
-		# image_attention_mask_binary = image_attention_mask_binary.view(-1, 1, 1, image_token_len_newline).repeat(1, 1, image_token_len_newline, 1)
-		# image_attention_mask = torch.zeros_like(image_attention_mask_binary)
-		# min_dtype = torch.finfo(inputs_embeds.dtype).min
-		# image_attention_mask = image_attention_mask.masked_fill(image_attention_mask_binary.eq(0.0), min_dtype)
-
 		self._use_flash_attention_2 = getattr(self, '_use_flash_attention_2', False)
 		self._use_sdpa = getattr(self, '_use_sdpa', True)
-		# if self._use_flash_attention_2:
-		# 	# 2d mask is passed through the layers
-		# 	attention_mask = attention_mask if (attention_mask is not None and 0 in attention_mask) else None
-		# elif self._use_sdpa and not output_attentions:
-		# 	# output_attentions=True can not be supported when using SDPA, and we fall back on
-		# 	# the manual implementation that requires a 4D causal mask in all cases.
-		# 	attention_mask = _prepare_4d_causal_attention_mask_for_sdpa(
-		# 		attention_mask,
-		# 		(batch_size, seq_length),
-		# 		inputs_embeds,
-		# 		past_key_values_length,
-		# 	)
-		# else:
-		# 	# 4d mask is passed through the layers
-		# 	attention_mask = _prepare_4d_causal_attention_mask(
-		# 		attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
-		# 	)
 
-		# attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, image_token_start_idx:image_token_start_idx+image_token_len_newline] = image_attention_mask
-
-		# embed positions
-		hidden_states = inputs_embeds
 		# decoder layers
 		all_hidden_states = () if output_hidden_states else None
 		all_self_attns = () if output_attentions else None
 		next_decoder_cache = None
 
-		latent_query_start_idx = self.config.image_position
+		vision_token_start_idx = self.config.image_position
+		
 		image_token_len_per_side = int(self.config.image_token_len**0.5)
-		latent_query_newline_num = self.config.image_token_len + image_token_len_per_side
-		vision_tokens = hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :].clone()
+		image_token_newline_num = self.config.image_token_len + image_token_len_per_side
+
+		image_token_len_per_side_concise = int(self.config.image_token_len_concise**0.5)
+
+		hidden_states_sys = inputs_embeds[:, :vision_token_start_idx]
+		hidden_states_text = inputs_embeds[:, vision_token_start_idx+image_token_newline_num:]
+		hidden_states_vision_full = inputs_embeds[:, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]
+		hidden_states_vision_concise = inputs_embeds_vision_concise
 
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
-				all_hidden_states += (hidden_states,)
+				all_hidden_states += (hidden_states_text,)
+
+			# [sys, vision_concise] to [sys, vision_concise]
 
 			if self.gradient_checkpointing and self.training:
-				layer_outputs = self._gradient_checkpointing_func(
+				layer_outputs_1 = self._gradient_checkpointing_func(
 					decoder_layer.__call__,
-					hidden_states,
-					attention_mask,
-					position_ids,
+					torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
+					torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
+					attention_mask_i2i,
+					torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
 					past_key_values,
 					output_attentions,
 					use_cache,
 				)
 			else:
-				layer_outputs = decoder_layer(
-					hidden_states,
-					attention_mask=attention_mask,
-					position_ids=position_ids,
+				layer_outputs_1 = decoder_layer(
+					torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
+					torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
+					attention_mask_i2i,
+					torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
 					past_key_value=past_key_values,
 					output_attentions=output_attentions,
 					use_cache=use_cache,
 				)
 
-			hidden_states = layer_outputs[0]
 
-			# vision_tokens = self.vision_sampler_layers[i](vision_tokens)
+			hidden_states_vision_concise = layer_outputs_1[0][:, vision_token_start_idx:]
 
-			# hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :] = vision_tokens
+			# update vision full with concise
+			hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise)
 
-			if not self.config.connector_only:
+			# text to [sys, vision_full, text]
+			if self.gradient_checkpointing and self.training:
+				layer_outputs_2 = self._gradient_checkpointing_func(
+					decoder_layer.__call__,
+					hidden_states_text,
+					torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
+					attention_mask_t2i,
+					position_ids_vision_text,
+					torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
+					past_key_values,
+					output_attentions,
+					use_cache,
+				)
+			else:
+				layer_outputs_2 = decoder_layer(
+					hidden_states_text,
+					torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
+					attention_mask_t2i,
+					position_ids_vision_text,
+					torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
+					past_key_value=past_key_values,
+					output_attentions=output_attentions,
+					use_cache=use_cache,
+				)
 
-				cross_layers_start_idx = self.config.start_of_vision_sampler_layers
-				cross_index_step = self.config.stride_of_vision_sampler_layers
-				cross_layers_start_idx_list = [cross_layers_start_idx+cross_index*cross_index_step for cross_index in range(len(self.vision_sampler_layers))]
 
-				if vision_tower_aux_feature_list is not None and i in cross_layers_start_idx_list:
-					latent_query_start_idx = self.config.image_position
+			hidden_states_text = layer_outputs_2[0]
+			hidden_states_sys = layer_outputs_1[0][:vision_token_start_idx]
 
-					if IS_XLA_AVAILABLE:
-						image_token_len_per_side = int(self.config.image_token_len**0.5)
-						latent_query_newline_num = self.config.image_token_len + image_token_len_per_side
-						latent_query_num = self.config.image_token_len
-						latent_query_with_newline = hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :].clone()
-						bs = latent_query_with_newline.shape[0]
-						latent_query_with_newline = latent_query_with_newline.view(bs, image_token_len_per_side, image_token_len_per_side+1, -1)
-						latent_query = latent_query_with_newline[:, :, :-1, :]
-						newline_embd = latent_query_with_newline[:, :, -1:, :]
-						vision_tower_aux_feature_list = [vision_tower_aux_feature.to(latent_query.dtype) for vision_tower_aux_feature in vision_tower_aux_feature_list]
-						bs = latent_query.shape[0]
-						latent_query = latent_query.view(bs*latent_query_num, 1, -1)
-						# gist_token_positions_expand = gist_token_positions.view(bs, 1, 1).repeat(1, 1, latent_query.shape[-1])
-						# gist_tokens = torch.gather(hidden_states.clone(), 1, gist_token_positions_expand).contiguous()
-						# gist_tokens = gist_tokens.view(bs, 1, 1, -1).repeat(1, latent_query_num, 1, 1).flatten(0, 1)
-						gist_tokens = None
-						if self.gradient_checkpointing and self.training:
-							latent_query = self._gradient_checkpointing_func(
-							self.vision_sampler_layers[(i-cross_layers_start_idx)//cross_index_step].__call__,
-							latent_query,
-							global_context_feature,
-							gist_tokens,
-							*vision_tower_aux_feature_list,
-							*vision_tower_aux_attention_masks_list
-							)
-						else:
-							latent_query = self.vision_sampler_layers[(i-cross_layers_start_idx)//cross_index_step](
-							latent_query,
-							global_context_feature,
-							gist_tokens,
-							*vision_tower_aux_feature_list,
-							*vision_tower_aux_attention_masks_list
-							)
-						# latent_query = latent_query.view(bs, self.latent_query_num, -1)
-						latent_query = latent_query.view(bs, image_token_len_per_side, image_token_len_per_side, -1)
-						latent_query_with_newline = torch.cat([latent_query, newline_embd], 2).flatten(1,2)
-						hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num] = latent_query_with_newline[:, :, :]
-					else:
-						bs = len(final_vision_feature_size)
-						latent_query_num_list = []
-						newline_embd_list = []
-						latent_query_list = []
-						for batch_i in range(bs):
-							cur_h, cur_w = final_vision_feature_size[batch_i]
-					
-							cur_latent_query_num = cur_h*cur_w
-							cur_latent_query_newline_num = cur_h * (cur_w+1)
-							cur_latent_query_with_newline = hidden_states[batch_i:batch_i+1, latent_query_start_idx:latent_query_start_idx+cur_latent_query_newline_num, :].clone()
-
-							cur_latent_query_with_newline = cur_latent_query_with_newline.view(1, cur_h, cur_w+1, -1)
-							cur_latent_query = cur_latent_query_with_newline[:, :, :-1, :]
-							cur_newline_embd = cur_latent_query_with_newline[:, :, -1:, :]
-
-							latent_query_num_list.append(cur_latent_query_num)
-							latent_query_list.append(cur_latent_query.contiguous().view(cur_latent_query_num, 1, -1))
-							newline_embd_list.append(cur_newline_embd)
-
-						latent_query = torch.cat(latent_query_list, 0)
-						if self.gradient_checkpointing and self.training:
-							latent_query = self._gradient_checkpointing_func(
-							self.vision_sampler_layers[(i-cross_layers_start_idx)//cross_index_step].__call__,
-							latent_query,
-							global_context_feature,
-							*vision_tower_aux_feature_list,
-							*vision_tower_aux_attention_masks_list
-							)
-						else:
-							latent_query = self.vision_sampler_layers[(i-cross_layers_start_idx)//cross_index_step](
-							latent_query,
-							global_context_feature,
-							*vision_tower_aux_feature_list,
-							*vision_tower_aux_attention_masks_list
-							)
-
-						latent_query = torch.split(latent_query, latent_query_num_list, 0)
-						for batch_i in range(bs):
-							cur_h, cur_w = final_vision_feature_size[batch_i]
-							cur_latent_query = latent_query[batch_i]
-							cur_newline_embd = newline_embd_list[batch_i]
-							cur_latent_query_newline_num = cur_h * (cur_w+1)
-							cur_latent_query = cur_latent_query.view(1, cur_h, cur_w, -1)
-							cur_latent_query_with_newline = torch.cat([cur_latent_query, cur_newline_embd], 2).flatten(1,2)
-							hidden_states[batch_i:batch_i+1, latent_query_start_idx:latent_query_start_idx+cur_latent_query_newline_num] = cur_latent_query_with_newline[:, :, :]
-
-			if use_cache:
-				next_decoder_cache = layer_outputs[2 if output_attentions else 1]
-
-			if output_attentions:
-				all_self_attns += (layer_outputs[1],)
-
-		hidden_states = self.norm(hidden_states)
+		hidden_states_text = self.norm(hidden_states_text)
 
 		# add hidden states from the last decoder layer
 		if output_hidden_states:
-			all_hidden_states += (hidden_states,)
+			all_hidden_states += (hidden_states_text,)
 
 		next_cache = None
-		if use_cache:
-			next_cache = next_decoder_cache.to_legacy_cache() if use_legacy_cache else next_decoder_cache
+
 		if not return_dict:
-			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
+			return tuple(v for v in [hidden_states_text, next_cache, all_hidden_states, all_self_attns] if v is not None)
 		return BaseModelOutputWithPast(
-			last_hidden_state=hidden_states,
+			last_hidden_state=hidden_states_text,
 			past_key_values=next_cache,
 			hidden_states=all_hidden_states,
 			attentions=all_self_attns,
@@ -325,8 +207,12 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 	def forward(
 		self,
 		input_ids: torch.LongTensor = None,
-		attention_mask: Optional[torch.Tensor] = None,
-		position_ids: Optional[torch.LongTensor] = None,
+		attention_mask_i2i: Optional[torch.Tensor] = None,
+		attention_mask_t2i: Optional[torch.Tensor] = None,
+		position_ids_sys: Optional[torch.LongTensor] = None,
+		position_ids_vision_concise: Optional[torch.LongTensor] = None,
+		position_ids_vision_full: Optional[torch.LongTensor] = None,
+		position_ids_vision_text: Optional[torch.LongTensor] = None,
 		past_key_values: Optional[List[torch.FloatTensor]] = None,
 		inputs_embeds: Optional[torch.FloatTensor] = None,
 		labels: Optional[torch.LongTensor] = None,
@@ -344,21 +230,14 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 		if inputs_embeds is None:
 			(
 				input_ids,
-				position_ids,
-				attention_mask,
-				past_key_values,
 				inputs_embeds,
-				labels,
+				inputs_embeds_vision_concise,
 				vision_tower_aux_feature_list,
 				vision_tower_aux_attention_masks_list,
 				final_vision_feature_size,
 				global_context_feature
 			) = self.prepare_inputs_labels_for_multimodal(
 				input_ids,
-				position_ids,
-				attention_mask,
-				past_key_values,
-				labels,
 				images,
 				image_aux_attention_masks_list,
 				image_sizes
@@ -382,14 +261,19 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			# decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
 			outputs = self.model(
 			input_ids=input_ids,
-			attention_mask=attention_mask,
-			position_ids=position_ids,
+			attention_mask_i2i=attention_mask_i2i,
+			attention_mask_t2i=attention_mask_t2i,
+			position_ids_sys=position_ids_sys,
+			position_ids_vision_concise=position_ids_vision_concise,
+			position_ids_vision_full=position_ids_vision_full,
+			position_ids_vision_text=position_ids_vision_text,
 			past_key_values=past_key_values,
 			inputs_embeds=inputs_embeds,
 			use_cache=use_cache,
 			output_attentions=output_attentions,
 			output_hidden_states=output_hidden_states,
 			return_dict=return_dict,
+			inputs_embeds_vision_concise=inputs_embeds_vision_concise,
 			vision_tower_aux_feature_list=vision_tower_aux_feature_list,
 			vision_tower_aux_attention_masks_list=vision_tower_aux_attention_masks_list, 
 			final_vision_feature_size=final_vision_feature_size,
@@ -430,6 +314,8 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 				)
 
 		hidden_states = outputs[0]
+		if labels is not None:
+			labels = labels[:, -hidden_states.shape[1]:]
 		if self.config.pretraining_tp > 1:
 			lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.config.pretraining_tp, dim=0)
 			logits = [F.linear(hidden_states, lm_head_slices[i]) for i in range(self.config.pretraining_tp)]

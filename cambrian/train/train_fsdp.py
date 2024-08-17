@@ -97,6 +97,7 @@ class ModelArguments:
     mm_vision_select_feature: Optional[str] = field(default="patch")
     vision_tower_aux_token_len_list: Optional[str] = field(default=None)
     image_token_len: Optional[int] = field(default=576)
+    image_token_len_concise: Optional[int] = field(default=36)
     num_query_group: Optional[int] = field(default=1)
     query_num_list: Optional[str] = field(default='[576]')
     connector_depth: Optional[int] = field(default=1)
@@ -1093,12 +1094,14 @@ def combine_causal_attention_mask(seq_len, attention_mask, dtype=torch.bfloat16)
 	return causal_mask
     
 
-def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len=576, image_aux_token_len_list=[192*192], max_length=2048):
+def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len=576, image_token_len_concise=36, image_aux_token_len_list=[192*192], max_length=2048):
     input_ids_im_replaced = []
     labels_im_replaced = []
     attention_mask_im_replaced = []
     position_ids_im_replaced = []
     gist_token_positions = []
+    position_ids_vision_concise = []
+    attention_mask_i2i = []
     im_aux_attention_masks_list = [[] for _ in range(len(image_aux_token_len_list))]
     base_image_token_len_per_side = int(image_token_len**0.5)
     image_aux_token_len_per_side_list = [int(image_aux_token_len_per_side**0.5) for image_aux_token_len_per_side in image_aux_token_len_list]
@@ -1134,6 +1137,11 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
                 cur_im_attention_mask, cur_im_position_ids = prepare_image_info(image_size, image_token_len, newline=True)
 
+                cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
+                cur_im_position_ids_concise += index
+                position_ids_vision_concise.append(cur_im_position_ids_concise)
+                cur_attention_mask_i2i = (torch.cat([cur_attention_mask_im_replaced[-1], cur_im_attention_mask_concise]))
+
                 for aux_i, image_aux_token_len_per_side in enumerate(image_aux_token_len_per_side_list):
                     assert image_aux_token_len_per_side >= base_image_token_len_per_side
                     num_base_crops_per_aux_side = image_aux_token_len_per_side//base_image_token_len_per_side
@@ -1168,22 +1176,18 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
                 first_answer_index = index_i
                 break
         gist_token_positions.append(first_answer_index-1)
-        # cur_attention_mask_im_part = cur_attention_mask_im_replaced[image_token_index:first_answer_index]
-        # cur_attention_mask_im_part_binary = cur_attention_mask_im_part.view(1, 1, -1).repeat(1, image_token_len_with_newline, 1)
-        # cur_attention_mask_im_part = torch.zeros_like(cur_attention_mask_im_part_binary)
+
         min_dtype = torch.finfo(torch.bfloat16).min
-        # cur_attention_mask_im_part = cur_attention_mask_im_part.masked_fill(cur_attention_mask_im_part_binary.eq(0.0), min_dtype)
 
         cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
-        # cur_attention_mask_im_replaced[:, image_token_index:image_token_end_index, :image_token_index] = min_dtype
-        
+        cur_attention_mask_i2i = combine_causal_attention_mask(len(cur_attention_mask_i2i), cur_attention_mask_i2i)
+
         input_ids_im_replaced.append(cur_input_ids_im_replaced)
         labels_im_replaced.append(cur_labels_im_replaced)
         attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
         position_ids_im_replaced.append(cur_position_ids_im_replaced)
+        attention_mask_i2i.append(cur_attention_mask_i2i)
 
-
-    
     # Truncate sequences to max length as image embeddings can make the sequence longer
     new_input_ids = [x[0:max_length] for x in input_ids_im_replaced]
     new_labels = [x[0:max_length] for x in labels_im_replaced]
@@ -1196,7 +1200,16 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     new_position_ids = torch.stack(new_position_ids)
     im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
     gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
-    return new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions
+
+    attention_mask_i2i = torch.stack(attention_mask_i2i)
+    position_ids_vision_concise = torch.stack(position_ids_vision_concise)
+
+    attention_mask_t2i = new_attention_mask[:, image_position+image_token_len_with_newline:]
+    position_ids_sys = new_position_ids[:, :image_position]
+    position_ids_vision_full = new_position_ids[:, image_position:image_position+image_token_len_with_newline]
+    position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
+
+    return new_input_ids, new_labels, attention_mask_i2i, attention_mask_t2i, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions
 
 
 @dataclass
@@ -1205,12 +1218,14 @@ class DataCollatorForSupervisedDataset(object):
 
     tokenizer: transformers.PreTrainedTokenizer
     image_token_len: int
+    image_token_len_concise: int
     image_aux_token_len_list: list
     image_position: int
 
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
 
         image_token_len = self.image_token_len
+        image_token_len_concise = self.image_token_len_concise
         image_aux_token_len_list = self.image_aux_token_len_list
         image_position = self.image_position
 
@@ -1250,12 +1265,19 @@ class DataCollatorForSupervisedDataset(object):
                 cur_attention_mask_tmp[image_position] = False
                 attention_mask[i] = cur_attention_mask_tmp
         image_sizes = [instance['image_size'] for instance in instances]
-        new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
+        # new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
+
+        new_input_ids, new_labels, attention_mask_i2i, attention_mask_t2i, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
+
         batch = dict(
             input_ids=new_input_ids,
             labels=new_labels,
-            attention_mask=new_attention_mask,
-            position_ids=new_position_ids,
+            attention_mask_i2i=attention_mask_i2i,
+            attention_mask_t2i=attention_mask_t2i,
+            position_ids_sys=position_ids_sys,
+            position_ids_vision_concise=position_ids_vision_concise,
+            position_ids_vision_full=position_ids_vision_full,
+            position_ids_vision_text=position_ids_vision_text,
             image_aux_attention_masks_list=im_aux_attention_masks_list,
             gist_token_positions=gist_token_positions
         )
@@ -1282,6 +1304,8 @@ def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
 
     if hasattr(data_args, 'image_token_len'):
         data_collator_kwargs['image_token_len'] = data_args.image_token_len
+    if hasattr(data_args, 'image_token_len_concise'):
+        data_collator_kwargs['image_token_len_concise'] = data_args.image_token_len_concise
 
     if hasattr(data_args, 'vision_tower_aux_token_len_list'):
         data_collator_kwargs['image_aux_token_len_list'] = data_args.vision_tower_aux_token_len_list
@@ -1508,6 +1532,7 @@ def train(INDEX, attn_implementation=None):
 
     use_cohere = False
     data_args.image_token_len = model_args.image_token_len
+    data_args.image_token_len_concise = model_args.image_token_len_concise
 
     if model_args.vision_tower_aux_list is not None:
         # copy image_token_len and image_position to model_args
@@ -1734,13 +1759,13 @@ def train(INDEX, attn_implementation=None):
 
         model.config.mm_use_im_start_end = data_args.mm_use_im_start_end = model_args.mm_use_im_start_end
         model.config.image_token_len = data_args.image_token_len = model_args.image_token_len
+        model.config.image_token_len_concise = data_args.image_token_len_concise = model_args.image_token_len_concise
         model.config.mm_projector_lr = training_args.mm_projector_lr
         model.config.mm_vision_sampler_lr = training_args.mm_vision_sampler_lr
         model.config.mm_vision_tower_lr = training_args.mm_vision_tower_lr
         training_args.use_im_start_end = model_args.mm_use_im_start_end
         model.config.mm_use_im_patch_token = model_args.mm_use_im_patch_token
         model.config.vision_tower_aux_token_len_list = data_args.vision_tower_aux_token_len_list = model_args.vision_tower_aux_token_len_list
-        model.config.image_token_len = data_args.image_token_len
         model.initialize_vision_tokenizer(model_args, tokenizer=tokenizer)
 
     if training_args.bits in [4, 8]:

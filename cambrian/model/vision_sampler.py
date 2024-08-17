@@ -3,7 +3,7 @@ import torch.utils.checkpoint
 from torch import nn
 import math
 import numpy as np
-
+import torch.nn.functional as F
 
 # https://github.com/facebookresearch/mae/blob/efb2a8062c206524e35e47d04501ed4f544c0ae8/util/pos_embed.py#L20
 def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
@@ -428,15 +428,164 @@ class VisionTokenSampler(nn.Module):
 		return queries
 
 
-from transformers.models.llama.modeling_llama import LlamaRMSNorm
+
+from transformers.models.llama.modeling_llama import LlamaSdpaAttention, LlamaDecoderLayer, LlamaRMSNorm, rotate_half, repeat_kv
 class VisionMLP(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
+		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.proj = nn.Sequential(
-			nn.Linear(config.hidden_size, intermediate_size, bias=False),
-			nn.GELU(),
+			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
+			nn.SiLU(),
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
 		self.layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-	def forward(self, x):
-		return self.layernorm(self.proj(x))+x
+	def forward(self, input_embed, context, side_len_input, side_len_context):
+		bs = input_embed.shape[0]
+		reduce_factor = side_len_input//side_len_context
+
+		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
+		context = context.view(bs, side_len_context, side_len_context+1, -1)
+
+		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 4)
+
+		context_newline = context[:, :, -1:]
+		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 4)
+
+		context = self.context_proj(context)
+		residual = input_embed
+		input_embed = self.input_proj(input_embed)
+		input_embed = self.layernorm(self.proj(torch.cat([input_embed, context], -1))) + residual
+		
+		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
+
+		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
+
+		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
+
+		return input_embed
+	
+
+def apply_rotary_pos_emb(q, k, cos, sin, position_ids_q, position_ids_k, unsqueeze_dim=1):
+	cos_q = cos[position_ids_q].unsqueeze(unsqueeze_dim)
+	sin_q = sin[position_ids_q].unsqueeze(unsqueeze_dim)
+	q_embed = (q * cos_q) + (rotate_half(q) * sin_q)
+	cos_k = cos[position_ids_k].unsqueeze(unsqueeze_dim)
+	sin_k = sin[position_ids_k].unsqueeze(unsqueeze_dim)
+	k_embed = (k * cos_k) + (rotate_half(k) * sin_k)
+	return q_embed, k_embed
+
+
+# Adapted from LlamaAttention.forward
+def LlamaSdpaAttention_forward(
+	self,
+	hidden_states,
+	kv_states,
+	attention_mask = None,
+	position_ids_q = None,
+	position_ids_kv = None,
+	past_key_value = None,
+	output_attentions = False,
+	use_cache= False,
+):
+
+	bsz, q_len, _ = hidden_states.size()
+	kv_seq_len = kv_states.shape[1]
+
+	query_states = self.q_proj(hidden_states)
+	key_states = self.k_proj(kv_states)
+	value_states = self.v_proj(kv_states)
+
+	query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+	key_states = key_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+	value_states = value_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+
+	cos, sin = self.rotary_emb(value_states, seq_len=max(q_len, kv_seq_len))
+
+	query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids_q, position_ids_kv)
+
+	key_states = repeat_kv(key_states, self.num_key_value_groups)
+	value_states = repeat_kv(value_states, self.num_key_value_groups)
+
+	if attention_mask is not None:
+		if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
+			raise ValueError(
+				f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
+			)
+
+	# SDPA with memory-efficient backend is currently (torch==2.1.2) bugged with non-contiguous inputs with custom attn_mask,
+	# Reference: https://github.com/pytorch/pytorch/issues/112577.
+	if query_states.device.type == "cuda" and attention_mask is not None:
+		query_states = query_states.contiguous()
+		key_states = key_states.contiguous()
+		value_states = value_states.contiguous()
+
+	attn_output = torch.nn.functional.scaled_dot_product_attention(
+		query_states,
+		key_states,
+		value_states,
+		attn_mask=attention_mask,
+		dropout_p=self.attention_dropout if self.training else 0.0,
+		# The q_len > 1 is necessary to match with AttentionMaskConverter.to_causal_4d that does not create a causal mask in case q_len == 1.
+		is_causal=self.is_causal and attention_mask is None and q_len > 1,
+	)
+
+	attn_output = attn_output.transpose(1, 2).contiguous()
+	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
+
+	attn_output = self.o_proj(attn_output)
+
+	return attn_output, None, past_key_value
+
+LlamaSdpaAttention.forward = LlamaSdpaAttention_forward
+
+def decoder_forward(
+	self,
+	hidden_states,
+	kv_states,
+	attention_mask = None,
+	position_ids_q = None,
+	position_ids_kv = None,
+	past_key_value = None,
+	output_attentions = False,
+	use_cache = False,
+	**kwargs,):
+		residual = hidden_states
+
+		hidden_states = self.input_layernorm(hidden_states)
+		kv_states = self.input_layernorm(kv_states)
+
+		# Cross Attention
+		hidden_states, self_attn_weights, present_key_value = self.self_attn(
+			hidden_states=hidden_states,
+			kv_states = kv_states,
+			attention_mask=attention_mask,
+			position_ids_q=position_ids_q,
+			position_ids_kv=position_ids_kv,
+			past_key_value=past_key_value,
+			output_attentions=output_attentions,
+			use_cache=use_cache,
+			**kwargs,
+		)
+		hidden_states = residual + hidden_states
+
+		# Fully Connected
+		residual = hidden_states
+		hidden_states = self.post_attention_layernorm(hidden_states)
+		hidden_states = self.mlp(hidden_states)
+		hidden_states = residual + hidden_states
+
+		outputs = (hidden_states,)
+
+		if output_attentions:
+			outputs += (self_attn_weights,)
+
+		if use_cache:
+			outputs += (present_key_value,)
+
+		return outputs
+
+
+LlamaDecoderLayer.forward = decoder_forward
