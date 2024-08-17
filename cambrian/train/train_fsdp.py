@@ -1204,7 +1204,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     attention_mask_i2i = torch.stack(attention_mask_i2i)
     position_ids_vision_concise = torch.stack(position_ids_vision_concise)
 
-    attention_mask_t2i = new_attention_mask[:, image_position+image_token_len_with_newline:]
+    attention_mask_t2i = new_attention_mask[:, :, image_position+image_token_len_with_newline:]
     position_ids_sys = new_position_ids[:, :image_position]
     position_ids_vision_full = new_position_ids[:, image_position:image_position+image_token_len_with_newline]
     position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
