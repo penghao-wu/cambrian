@@ -1176,6 +1176,16 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
                 break
         gist_token_positions.append(first_answer_index-1)
 
+
+        cur_input_ids_im_replaced = cur_input_ids_im_replaced[:max_length]
+        cur_labels_im_replaced = cur_labels_im_replaced[:max_length]
+        cur_position_ids_im_replaced = cur_position_ids_im_replaced[:max_length]
+        input_ids_im_replaced.append(cur_input_ids_im_replaced)
+        labels_im_replaced.append(cur_labels_im_replaced)
+        position_ids_im_replaced.append(cur_position_ids_im_replaced)
+
+
+
         min_dtype = torch.finfo(torch.bfloat16).min
 
         cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
@@ -1185,11 +1195,12 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
 
         len_sys_full_text = len(cur_input_ids_im_replaced)
-        len_sys_concise_text = len_sys_full_text + image_token_len_concise_with_newline - image_token_len_with_newline
-        len_sys_all = len_sys_full_text + image_token_len_concise_with_newline
+        len_sys_all = len(cur_input_ids_im_replaced) + image_token_len_concise_with_newline
+        len_sys_concise_text = len_sys_full_text + image_token_len_concise_with_newline - image_token_len_with_newline 
 
         # [sys, concise, text] to [sys, concise, full, text]
         cur_attention_mask_c2f = torch.ones((1, len_sys_concise_text, len_sys_all)) * min_dtype
+        assert False, cur_attention_mask_c2f.shape
 
         # sys to all
         cur_attention_mask_c2f[:, :image_position, :image_position] = cur_attention_mask_im_replaced[:, :image_position, :image_position] # sys to sys
@@ -1202,21 +1213,14 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
         cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
         cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
         
-        input_ids_im_replaced.append(cur_input_ids_im_replaced)
-        labels_im_replaced.append(cur_labels_im_replaced)
-        attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
-        position_ids_im_replaced.append(cur_position_ids_im_replaced)
         attention_mask_c2f.append(cur_attention_mask_c2f)
 
     # Truncate sequences to max length as image embeddings can make the sequence longer
     new_input_ids = [x[0:max_length] for x in input_ids_im_replaced]
     new_labels = [x[0:max_length] for x in labels_im_replaced]
-    # new_attention_mask = [x[0:max_length] for x in attention_mask_im_replaced]
-    new_attention_mask = [x[:, 0:max_length, 0:max_length] for x in attention_mask_im_replaced]
     new_position_ids = [x[0:max_length] for x in position_ids_im_replaced]
     new_input_ids = torch.stack(new_input_ids)
     new_labels = torch.stack(new_labels)
-    new_attention_mask = torch.stack(new_attention_mask)
     new_position_ids = torch.stack(new_position_ids)
     im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
     gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
