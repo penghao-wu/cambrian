@@ -1200,7 +1200,6 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
         # [sys, concise, text] to [sys, concise, full, text]
         cur_attention_mask_c2f = torch.ones((1, len_sys_concise_text, len_sys_all)) * min_dtype
-        assert False, cur_attention_mask_c2f.shape
 
         # sys to all
         cur_attention_mask_c2f[:, :image_position, :image_position] = cur_attention_mask_im_replaced[:, :image_position, :image_position] # sys to sys
