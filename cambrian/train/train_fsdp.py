@@ -1162,10 +1162,10 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
                     cur_attention_mask_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_attention_mask.device, dtype=cur_attention_mask.dtype))
                     cur_position_ids_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_input_ids.device, dtype=torch.long))
         
-        cur_input_ids_im_replaced = torch.cat(cur_input_ids_im_replaced)
-        cur_labels_im_replaced = torch.cat(cur_labels_im_replaced)
-        cur_attention_mask_im_replaced = torch.cat(cur_attention_mask_im_replaced)
-        cur_position_ids_im_replaced = torch.cat(cur_position_ids_im_replaced)
+        cur_input_ids_im_replaced = torch.cat(cur_input_ids_im_replaced)[:max_length]
+        cur_labels_im_replaced = torch.cat(cur_labels_im_replaced)[:max_length]
+        cur_attention_mask_im_replaced = torch.cat(cur_attention_mask_im_replaced)[:max_length]
+        cur_position_ids_im_replaced = torch.cat(cur_position_ids_im_replaced)[:max_length]
 
         image_token_index = image_token_indices[1]
         image_token_end_index = image_token_index + image_token_len_with_newline
@@ -1176,14 +1176,9 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
                 break
         gist_token_positions.append(first_answer_index-1)
 
-
-        cur_input_ids_im_replaced = cur_input_ids_im_replaced[:max_length]
-        cur_labels_im_replaced = cur_labels_im_replaced[:max_length]
-        cur_position_ids_im_replaced = cur_position_ids_im_replaced[:max_length]
         input_ids_im_replaced.append(cur_input_ids_im_replaced)
         labels_im_replaced.append(cur_labels_im_replaced)
         position_ids_im_replaced.append(cur_position_ids_im_replaced)
-
 
 
         min_dtype = torch.finfo(torch.bfloat16).min
