@@ -428,17 +428,17 @@ class CambrianMetaForCausalLM(ABC):
         image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
 
         if IS_XLA_AVAILABLE:
-            image_features = image_features.view(batch_size, final_height, final_width, -1)
+            image_features = image_features.view(bs, final_height, final_width, -1)
             image_features = torch.cat((
                 image_features,
-                self.model.image_newline[None, None, None, :].expand(batch_size, final_height, 1, -1)
+                self.model.image_newline[None, None, None, :].expand(bs, final_height, 1, -1)
             ), dim=2)
             image_features = image_features.flatten(1, 2)
 
-            image_features_concise = image_features_concise.view(batch_size, final_height_concise, final_width_concise, -1)
+            image_features_concise = image_features_concise.view(bs, final_height_concise, final_width_concise, -1)
             image_features_concise = torch.cat((
                 image_features_concise,
-                self.model.image_newline[None, None, None, :].expand(batch_size, final_height_concise, 1, -1)
+                self.model.image_newline[None, None, None, :].expand(bs, final_height_concise, 1, -1)
             ), dim=2)
             image_features_concise = image_features_concise.flatten(1, 2)
 
@@ -589,12 +589,12 @@ class CambrianMetaForCausalLM(ABC):
 
             # Combine them
             max_len = max(x.shape[0] for x in new_input_embeds)
-            batch_size = len(new_input_embeds)
+            bs = len(new_input_embeds)
 
             new_input_embeds_padded = []
-            new_labels_padded = torch.full((batch_size, max_len), IGNORE_INDEX, dtype=new_labels[0].dtype, device=new_labels[0].device)
-            attention_mask = torch.zeros((batch_size, max_len), dtype=attention_mask.dtype, device=attention_mask.device)
-            position_ids = torch.zeros((batch_size, max_len), dtype=position_ids.dtype, device=position_ids.device)
+            new_labels_padded = torch.full((bs, max_len), IGNORE_INDEX, dtype=new_labels[0].dtype, device=new_labels[0].device)
+            attention_mask = torch.zeros((bs, max_len), dtype=attention_mask.dtype, device=attention_mask.device)
+            position_ids = torch.zeros((bs, max_len), dtype=position_ids.dtype, device=position_ids.device)
 
             for i, (cur_new_embed, cur_new_labels) in enumerate(zip(new_input_embeds, new_labels)):
                 cur_len = cur_new_embed.shape[0]
