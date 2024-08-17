@@ -1101,6 +1101,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     position_ids_im_replaced = []
     gist_token_positions = []
     position_ids_vision_concise = []
+    attention_mask_c2f = []
     im_aux_attention_masks_list = [[] for _ in range(len(image_aux_token_len_list))]
     base_image_token_len_per_side = int(image_token_len**0.5)
     image_aux_token_len_per_side_list = [int(image_aux_token_len_per_side**0.5) for image_aux_token_len_per_side in image_aux_token_len_list]
@@ -1188,11 +1189,12 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
         cur_attention_mask_vision_concise_to_all[:, :, :image_token_len_concise_with_newline] = cur_im_attention_mask_concise
 
         cur_attention_mask_c2f = torch.cat([cur_attention_mask_sys_to_all, cur_attention_mask_vision_concise_to_all, cur_attention_mask_text_to_all], 1)
-
+        
         input_ids_im_replaced.append(cur_input_ids_im_replaced)
         labels_im_replaced.append(cur_labels_im_replaced)
         attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
         position_ids_im_replaced.append(cur_position_ids_im_replaced)
+        attention_mask_c2f.append(cur_attention_mask_c2f)
 
     # Truncate sequences to max length as image embeddings can make the sequence longer
     new_input_ids = [x[0:max_length] for x in input_ids_im_replaced]
@@ -1207,13 +1209,16 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
     gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
 
+    attention_mask_c2f = [x[:, 0:max_length, 0:max_length] for x in attention_mask_c2f]
+    attention_mask_c2f = torch.stack(attention_mask_c2f)
+
     position_ids_vision_concise = torch.stack(position_ids_vision_concise)
 
     position_ids_sys = new_position_ids[:, :image_position]
     position_ids_vision_full = new_position_ids[:, image_position:image_position+image_token_len_with_newline]
     position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
 
-    return new_input_ids, new_labels, cur_attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions
+    return new_input_ids, new_labels, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions
 
 
 @dataclass
@@ -1271,12 +1276,12 @@ class DataCollatorForSupervisedDataset(object):
         image_sizes = [instance['image_size'] for instance in instances]
         # new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
 
-        new_input_ids, new_labels, cur_attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
+        new_input_ids, new_labels, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
 
         batch = dict(
             input_ids=new_input_ids,
             labels=new_labels,
-            cur_attention_mask_c2f=cur_attention_mask_c2f,
+            attention_mask_c2f=attention_mask_c2f,
             position_ids_sys=position_ids_sys,
             position_ids_vision_concise=position_ids_vision_concise,
             position_ids_vision_full=position_ids_vision_full,
