@@ -1224,7 +1224,6 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
     gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
 
-    attention_mask_c2f = [x[:, 0:max_length, 0:max_length+image_token_len_concise_with_newline] for x in attention_mask_c2f]
     attention_mask_c2f = torch.stack(attention_mask_c2f)
 
     position_ids_vision_concise = torch.stack(position_ids_vision_concise)
