@@ -471,12 +471,7 @@ class VisionMLP(nn.Module):
 def apply_rotary_pos_emb(q, k, cos, sin, position_ids_q, position_ids_k, unsqueeze_dim=1):
 	cos_q = cos[position_ids_q].unsqueeze(unsqueeze_dim)
 	sin_q = sin[position_ids_q].unsqueeze(unsqueeze_dim)
-	try:
-		q_embed = (q * cos_q)
-	except Exception as e:
-		assert False, (q.shape, q.device, q.dtype, cos_q.shape, cos_q.device, cos_q.dtype)
-	rotate_half_q = rotate_half(q)
-	q_embed = q_embed + rotate_half_q * sin_q
+	q_embed = (q * cos_q) + (rotate_half(q) * sin_q)
 	cos_k = cos[position_ids_k].unsqueeze(unsqueeze_dim)
 	sin_k = sin[position_ids_k].unsqueeze(unsqueeze_dim)
 	k_embed = (k * cos_k) + (rotate_half(k) * sin_k)

@@ -167,7 +167,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 
 			hidden_states_text = layer_outputs_2[0]
-			hidden_states_sys = layer_outputs_1[0][:vision_token_start_idx]
+			hidden_states_sys = layer_outputs_1[0][:, :vision_token_start_idx]
 
 		hidden_states_text = self.norm(hidden_states_text)
 
