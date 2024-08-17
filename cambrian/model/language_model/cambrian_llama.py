@@ -110,36 +110,33 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 			# [sys, vision_concise] to [sys, vision_concise]
 
-			# if self.gradient_checkpointing and self.training:
-			# 	layer_outputs_1 = self._gradient_checkpointing_func(
-			# 		decoder_layer.__call__,
-			# 		torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
-			# 		torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
-			# 		attention_mask_i2i,
-			# 		torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
-			# 		torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
-			# 		past_key_values,
-			# 		output_attentions,
-			# 		use_cache,
-			# 	)
-			# else:
-			# 	
-			layer_outputs_1 = decoder_layer(
-				torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
-				torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
-				attention_mask_i2i,
-				torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
-				torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
-				past_key_value=past_key_values,
-				output_attentions=output_attentions,
-				use_cache=use_cache,
-			)
+			if self.gradient_checkpointing and self.training:
+				layer_outputs_1 = self._gradient_checkpointing_func(
+					decoder_layer.__call__,
+					torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
+					torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
+					attention_mask_i2i,
+					torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
+					past_key_values,
+					output_attentions,
+					use_cache,
+				)
+			else:
+				
+				layer_outputs_1 = decoder_layer(
+					torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
+					torch.cat([hidden_states_sys, hidden_states_vision_concise], dim=1),
+					attention_mask_i2i,
+					torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise], dim=1),
+					past_key_value=past_key_values,
+					output_attentions=output_attentions,
+					use_cache=use_cache,
+				)
 
 
 			hidden_states_vision_concise = layer_outputs_1[0][:, vision_token_start_idx:]
-
-			# update vision full with concise
-			hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise)
 
 			# text to [sys, vision_full, text]
 			if self.gradient_checkpointing and self.training:
@@ -165,6 +162,10 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 					output_attentions=output_attentions,
 					use_cache=use_cache,
 				)
+
+
+			# update vision full with concise
+			hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise)
 
 
 			hidden_states_text = layer_outputs_2[0]
