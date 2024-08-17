@@ -114,10 +114,10 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				layer_outputs = self._gradient_checkpointing_func(
 					decoder_layer.__call__,
 					torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], dim=1),
-					torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
+					torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], dim=1),
 					attention_mask_c2f,
-					torch.cat([position_ids_sys, hidden_states_vision_concise, position_ids_vision_text], dim=1),
-					torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1),
 					past_key_values,
 					output_attentions,
 					use_cache,
@@ -125,10 +125,10 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 			else:
 				layer_outputs = decoder_layer(
 					torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], dim=1),
-					torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
+					torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], dim=1),
 					attention_mask_c2f,
-					torch.cat([position_ids_sys, hidden_states_vision_concise, position_ids_vision_text], dim=1),
-					torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1),
 					past_key_values,
 					output_attentions,
 					use_cache,

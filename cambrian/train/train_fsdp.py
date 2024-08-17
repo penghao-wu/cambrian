@@ -1183,12 +1183,24 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
         num_tokens_per_side_concise = int(image_token_len_concise**0.5)
         image_token_len_concise_with_newline = image_token_len_concise + num_tokens_per_side_concise
 
-        cur_attention_mask_sys_to_all = cur_attention_mask_im_replaced[:, :image_position, :]
-        cur_attention_mask_text_to_all = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :]
-        cur_attention_mask_vision_concise_to_all = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_concise_with_newline]
-        cur_attention_mask_vision_concise_to_all[:, :, :image_token_len_concise_with_newline] = cur_im_attention_mask_concise
 
-        cur_attention_mask_c2f = torch.cat([cur_attention_mask_sys_to_all, cur_attention_mask_vision_concise_to_all, cur_attention_mask_text_to_all], 1)
+        len_sys_full_text = len(cur_input_ids_im_replaced)
+        len_sys_concise_text = len_sys_full_text + image_token_len_concise_with_newline - image_token_len_with_newline
+        len_sys_all = len_sys_full_text + image_token_len_concise_with_newline
+
+        # [sys, concise, text] to [sys, concise, full, text]
+        cur_attention_mask_c2f = torch.ones((1, len_sys_concise_text, len_sys_all)) * min_dtype
+
+        # sys to all
+        cur_attention_mask_c2f[:, :image_position, :image_position] = cur_attention_mask_im_replaced[:, :image_position, :image_position] # sys to sys
+
+        # concise to all
+        cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] # concise to sys
+        cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise # concise to concise
+
+        # text to all
+        cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_with_newline, :image_position] # text to sys
+        cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_with_newline, image_position:] # text to full+text
         
         input_ids_im_replaced.append(cur_input_ids_im_replaced)
         labels_im_replaced.append(cur_labels_im_replaced)
@@ -1209,7 +1221,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
     gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
 
-    attention_mask_c2f = [x[:, 0:max_length, 0:max_length] for x in attention_mask_c2f]
+    attention_mask_c2f = [x[:, 0:max_length, 0:max_length+image_token_len_concise_with_newline] for x in attention_mask_c2f]
     attention_mask_c2f = torch.stack(attention_mask_c2f)
 
     position_ids_vision_concise = torch.stack(position_ids_vision_concise)
