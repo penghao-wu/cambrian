@@ -162,7 +162,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 					use_cache,
 				)
 
-			assert torch.allclose(layer_outputs[0], layer_outputs_1[0], atol=1e-05)
+			assert torch.allclose(layer_outputs[0], layer_outputs_1[0], atol=1e-05), (torch.allclose(layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num], layer_outputs_1[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]), torch.allclose(layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:], layer_outputs_1[0][:, vision_token_start_idx+image_token_concise_newline_num:]), torch.allclose(layer_outputs[0][:, :vision_token_start_idx], layer_outputs_1[0][:, :vision_token_start_idx]))
 
 			hidden_states_vision_concise = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]
 			hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:]
