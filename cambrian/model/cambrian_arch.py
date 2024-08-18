@@ -178,9 +178,9 @@ class CambrianMetaModel:
                 self.image_newline = nn.Parameter(
                     torch.randn(self.config.hidden_size, dtype=self.dtype) * embed_std
                 )
-                # self.vision_sampler_layers = nn.ModuleList(
-                #     [VisionMLP(self.config) for layer_idx in range(0, self.config.num_hidden_layers)]
-                #     )
+                self.vision_sampler_layers = nn.ModuleList(
+                    [VisionMLP(self.config) for layer_idx in range(0, self.config.num_hidden_layers)]
+                    )
         else:
             # In case it is frozen by LoRA
             for p in self.mm_projector.parameters():
@@ -419,14 +419,13 @@ class CambrianMetaForCausalLM(ABC):
         image_features = torch.cat(final_image_features_list, -1)
         image_features = self.get_model().mm_projector(image_features).to(dtype)
 
-        # image_features_concise = F.interpolate(
-        #         image_features.view(bs, final_height, final_width, -1).permute(0, 3, 1, 2).contiguous().to(torch.float32),
-        #         size=(final_height_concise, final_width_concise),
-        #         mode='bilinear',
-        #         align_corners=False
-        #     ).to(image_features.dtype)
-        # image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
-        # image_features_concise = image_features
+        image_features_concise = F.interpolate(
+                image_features.view(bs, final_height, final_width, -1).permute(0, 3, 1, 2).contiguous().to(torch.float32),
+                size=(final_height_concise, final_width_concise),
+                mode='bilinear',
+                align_corners=False
+            ).to(image_features.dtype)
+        image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
 
         if IS_XLA_AVAILABLE:
             image_features = image_features.view(bs, final_height, final_width, -1)
@@ -436,13 +435,12 @@ class CambrianMetaForCausalLM(ABC):
             ), dim=2)
             image_features = image_features.flatten(1, 2)
 
-            # image_features_concise = image_features_concise.view(bs, final_height_concise, final_width_concise, -1)
-            # image_features_concise = torch.cat((
-            #     image_features_concise,
-            #     self.model.image_newline[None, None, None, :].expand(bs, final_height_concise, 1, -1)
-            # ), dim=2)
-            # image_features_concise = image_features_concise.flatten(1, 2)
-            image_features_concise = image_features
+            image_features_concise = image_features_concise.view(bs, final_height_concise, final_width_concise, -1)
+            image_features_concise = torch.cat((
+                image_features_concise,
+                self.model.image_newline[None, None, None, :].expand(bs, final_height_concise, 1, -1)
+            ), dim=2)
+            image_features_concise = image_features_concise.flatten(1, 2)
 
 
             final_size = [(final_height, final_width)]*bs
