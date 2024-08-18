@@ -469,7 +469,28 @@ class VisionMLP(nn.Module):
 
 		return input_embed
 	
+class CrossNorm(nn.Module):
+    def __init__(self, C, epsilon=1e-5, affine=False):
+        super(CrossNorm, self).__init__()
+        self.epsilon = epsilon
+        self.affine = affine
+        if self.affine:
+            self.gamma = nn.Parameter(torch.ones(1, 1, C))
+            self.beta = nn.Parameter(torch.zeros(1, 1, C))
+        else:
+            self.gamma = None
+            self.beta = None
 
+    def forward(self, x, ref):
+        mean = ref.mean(dim=1, keepdim=True)
+        variance = ref.var(dim=1, unbiased=False, keepdim=True)
+        
+        x_normalized = (x - mean) / torch.sqrt(variance + self.epsilon)
+        
+        if self.affine:
+            x_normalized = x_normalized * self.gamma + self.beta
+        
+        return x_normalized
 
 class VisionMLP_crossnorm(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
@@ -482,7 +503,7 @@ class VisionMLP_crossnorm(nn.Module):
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
 		self.layernorm_pre = LlamaRMSNorm(intermediate_size*2, eps=config.rms_norm_eps)
-		self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+		self.cross_norm_post = CrossNorm(config.hidden_size)
 	def forward(self, input_embed, context, side_len_input, side_len_context):
 		bs = input_embed.shape[0]
 		reduce_factor = side_len_input//side_len_context
@@ -494,13 +515,16 @@ class VisionMLP_crossnorm(nn.Module):
 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 4)
 
 		context_newline = context[:, :, -1:]
-		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 4)
+		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
+
+		ref_for_norm = context
+		context = context.flatten(0, 1)
 
 		context = self.context_proj(context)
 		residual = input_embed
 		input_embed = self.input_proj(input_embed)
 		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
-		input_embed = self.layernorm_post(self.proj(input_embed)) + residual
+		input_embed = self.cross_norm_post(self.proj(input_embed) + residual, ref_for_norm)
 		
 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
