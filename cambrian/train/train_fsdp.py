@@ -1230,17 +1230,17 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     position_ids_vision_full = new_position_ids[:, image_position:image_position+image_token_len_with_newline]
     position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
 
-    data = dict()
-    data['attention_mask_c2f'] = attention_mask_c2f[0, 0]
-    data['new_attention_masks'] = new_attention_masks[0, 0]
-    data['new_input_ids'] = new_input_ids[0]
-    data['position_ids_sys'] = position_ids_sys[0]
-    data['position_ids_vision_concise'] = position_ids_vision_concise[0]
-    data['position_ids_vision_full'] = position_ids_vision_full[0]
-    data['position_ids_vision_text'] = position_ids_vision_text[0]
+    # data = dict()
+    # data['attention_mask_c2f'] = attention_mask_c2f[0, 0]
+    # data['new_attention_masks'] = new_attention_masks[0, 0]
+    # data['new_input_ids'] = new_input_ids[0]
+    # data['position_ids_sys'] = position_ids_sys[0]
+    # data['position_ids_vision_concise'] = position_ids_vision_concise[0]
+    # data['position_ids_vision_full'] = position_ids_vision_full[0]
+    # data['position_ids_vision_text'] = position_ids_vision_text[0]
 
-    torch.save(data, 'data.pth')
-    assert False
+    # torch.save(data, 'data.pth')
+    # assert False
 
 
     return new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions
