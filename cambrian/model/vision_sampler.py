@@ -470,7 +470,7 @@ class VisionMLP(nn.Module):
 		return input_embed
 	
 class CrossNorm(nn.Module):
-    def __init__(self, C, epsilon=1e-5, affine=True):
+    def __init__(self, C, epsilon=1e-5, affine=False):
         super(CrossNorm, self).__init__()
         self.epsilon = epsilon
         self.affine = affine
