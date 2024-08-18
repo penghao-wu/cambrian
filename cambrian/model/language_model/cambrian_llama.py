@@ -107,6 +107,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 		hidden_states = inputs_embeds
 
+		assert (attention_mask_c2f[:, :, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]==0).sum() == (attention_masks[:, :, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]==0).sum(), ((attention_mask_c2f[:, :, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]==0).sum(), (attention_masks[:, :, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]==0).sum())
+
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states_text,)
