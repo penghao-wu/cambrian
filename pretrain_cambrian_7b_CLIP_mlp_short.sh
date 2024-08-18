@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_576_36_shareGPT4V_pretrain_lr2e4" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_576_64_shareGPT4V_pretrain_lr1e4" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -15,7 +15,7 @@ python cambrian/train/train_tpu.py \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --image_token_len 576 \
-    --image_token_len_concise 36 \
+    --image_token_len_concise 64 \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \
@@ -26,7 +26,7 @@ python cambrian/train/train_tpu.py \
     --start_of_vision_sampler_layers 0 \
     --stride_of_vision_sampler_layers 3 \
     --mm_projector_type mlp2x_gelu \
-    --mm_vision_sampler_lr 2e-4 \
+    --mm_vision_sampler_lr 1e-4 \
     --tune_mm_mlp_adapter True \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
@@ -48,7 +48,7 @@ python cambrian/train/train_tpu.py \
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
     --tf32 False \
-    --model_max_length 2006 \
+    --model_max_length 1976 \
     --gradient_checkpointing True \
     --dataloader_num_workers 4 \
     --lazy_preprocess True \
