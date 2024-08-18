@@ -171,7 +171,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 			hidden_states_text_1 = layer_outputs_1[0][:, vision_token_start_idx+image_token_concise_newline_num:]
 			hidden_states_sys_1 = layer_outputs_1[0][:, :vision_token_start_idx]
 
-			assert False, ((hidden_states_vision_concise-hidden_states_vision_concise_1)[0].mean(-1).argmax(), (hidden_states_text-hidden_states_text_1).max()[0].mean(-1).argmax())
+			assert False, ((hidden_states_vision_concise-hidden_states_vision_concise_1)[0].mean(-1).argmax(), (hidden_states_text-hidden_states_text_1)[0].mean(-1).argmax())
 
 			hidden_states_vision_full = hidden_states_vision_concise
 			# # update vision full with concise
