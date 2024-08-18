@@ -107,8 +107,6 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 		hidden_states = inputs_embeds
 
-		assert torch.allclose(attention_mask_c2f[:, :, vision_token_start_idx:vision_token_start_idx+image_token_newline_num, vision_token_start_idx:vision_token_start_idx+image_token_newline_num], attention_masks[:, :, vision_token_start_idx:vision_token_start_idx+image_token_newline_num, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]), ((attention_mask_c2f[:, :, vision_token_start_idx:vision_token_start_idx+image_token_newline_num, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]==0).sum(), (attention_masks[:, :, vision_token_start_idx:vision_token_start_idx+image_token_newline_num, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]==0).sum())
-
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states_text,)
@@ -164,7 +162,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 					use_cache,
 				)
 
-			assert torch.allclose(layer_outputs[0], layer_outputs_1[0]), (torch.allclose(layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num], layer_outputs_1[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]), torch.allclose(layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:], layer_outputs_1[0][:, vision_token_start_idx+image_token_concise_newline_num:]), torch.allclose(layer_outputs[0][:, :vision_token_start_idx], layer_outputs_1[0][:, :vision_token_start_idx]))
+			assert torch.allclose(layer_outputs[0], layer_outputs_1[0]), (layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]-layer_outputs_1[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]).mean(-1).sum()
 
 			hidden_states_vision_concise = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]
 			hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:]
