@@ -524,7 +524,8 @@ class VisionMLP_crossnorm(nn.Module):
 		residual = input_embed
 		input_embed = self.input_proj(input_embed)
 		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
-		input_embed = self.cross_norm_post(self.proj(input_embed) + residual, ref_for_norm)
+		input_embed = self.proj(input_embed) + residual
+		input_embed = self.cross_norm_post(input_embed.view(bs, side_len_input*side_len_input, -1), ref_for_norm)
 		
 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
