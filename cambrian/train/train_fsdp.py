@@ -1179,6 +1179,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
         input_ids_im_replaced.append(cur_input_ids_im_replaced)
         labels_im_replaced.append(cur_labels_im_replaced)
         position_ids_im_replaced.append(cur_position_ids_im_replaced)
+        attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
 
 
         min_dtype = torch.finfo(torch.bfloat16).min
@@ -1216,6 +1217,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     new_input_ids = torch.stack(new_input_ids)
     new_labels = torch.stack(new_labels)
     new_position_ids = torch.stack(new_position_ids)
+    new_attention_masks = torch.stack(attention_mask_im_replaced)
     im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
     gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
 
@@ -1227,7 +1229,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     position_ids_vision_full = new_position_ids[:, image_position:image_position+image_token_len_with_newline]
     position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
 
-    return new_input_ids, new_labels, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions
+    return new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions
 
 
 @dataclass
@@ -1285,11 +1287,12 @@ class DataCollatorForSupervisedDataset(object):
         image_sizes = [instance['image_size'] for instance in instances]
         # new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
 
-        new_input_ids, new_labels, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
+        new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
 
         batch = dict(
             input_ids=new_input_ids,
             labels=new_labels,
+            attention_masks=new_attention_masks,
             attention_mask_c2f=attention_mask_c2f,
             position_ids_sys=position_ids_sys,
             position_ids_vision_concise=position_ids_vision_concise,

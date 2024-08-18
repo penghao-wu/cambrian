@@ -57,6 +57,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 	def forward(
 		self,
 		input_ids: torch.LongTensor = None,
+		attention_masks: Optional[torch.Tensor] = None,
 		attention_mask_c2f: Optional[torch.Tensor] = None,
 		position_ids_sys: Optional[torch.LongTensor] = None,
 		position_ids_vision_concise: Optional[torch.LongTensor] = None,
@@ -104,6 +105,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		hidden_states_vision_full = inputs_embeds[:, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]
 		hidden_states_vision_concise = inputs_embeds_vision_concise
 
+		hidden_states = inputs_embeds
+
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states_text,)
@@ -134,13 +137,40 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 					use_cache,
 				)
 
+
+			if self.gradient_checkpointing and self.training:
+				layer_outputs_1 = self._gradient_checkpointing_func(
+					decoder_layer.__call__,
+					torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], dim=1),
+					torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], dim=1),
+					attention_masks,
+					torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
+					past_key_values,
+					output_attentions,
+					use_cache,
+				)
+			else:
+				layer_outputs_1 = decoder_layer(
+					torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], dim=1),
+					torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], dim=1),
+					attention_masks,
+					torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
+					torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
+					past_key_values,
+					output_attentions,
+					use_cache,
+				)
+
+			assert torch.allclose(layer_outputs[0], layer_outputs_1[0])
+
 			hidden_states_vision_concise = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]
 			hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:]
 			hidden_states_sys = layer_outputs[0][:, :vision_token_start_idx]
 
-			# hidden_states_vision_full = hidden_states_vision_concise
-			# update vision full with concise
-			hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise)
+			hidden_states_vision_full = hidden_states_vision_concise
+			# # update vision full with concise
+			# hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise)
 
 		hidden_states_text = self.norm(hidden_states_text)
 
@@ -180,6 +210,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 	def forward(
 		self,
 		input_ids: torch.LongTensor = None,
+		attention_masks: Optional[torch.Tensor] = None,
 		attention_mask_c2f: Optional[torch.Tensor] = None,
 		position_ids_sys: Optional[torch.LongTensor] = None,
 		position_ids_vision_concise: Optional[torch.LongTensor] = None,
@@ -233,6 +264,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			# decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
 			outputs = self.model(
 			input_ids=input_ids,
+			attention_masks=attention_masks,
 			attention_mask_c2f=attention_mask_c2f,
 			position_ids_sys=position_ids_sys,
 			position_ids_vision_concise=position_ids_vision_concise,
