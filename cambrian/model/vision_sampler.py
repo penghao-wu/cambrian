@@ -470,13 +470,13 @@ class VisionMLP(nn.Module):
 		return input_embed
 	
 class CrossNorm(nn.Module):
-    def __init__(self, C, epsilon=1e-5, affine=False):
+    def __init__(self, C, epsilon=1e-5, affine=True):
         super(CrossNorm, self).__init__()
         self.epsilon = epsilon
         self.affine = affine
         if self.affine:
             self.gamma = nn.Parameter(torch.ones(1, 1, C))
-            self.beta = nn.Parameter(torch.zeros(1, 1, C))
+            # self.beta = nn.Parameter(torch.zeros(1, 1, C))
         else:
             self.gamma = None
             self.beta = None
@@ -488,7 +488,7 @@ class CrossNorm(nn.Module):
         x_normalized = (x - mean) / torch.sqrt(variance + self.epsilon)
         
         if self.affine:
-            x_normalized = x_normalized * self.gamma + self.beta
+            x_normalized = x_normalized * self.gamma
         
         return x_normalized
 
