@@ -1132,16 +1132,17 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
             
             if i < len(image_token_indices) - 2:
                 num_tokens_per_side = int(image_token_len**0.5)
+                num_tokens_per_side_concise = int(image_token_len_concise**0.5)
                 image_token_len_with_newline = image_token_len + num_tokens_per_side
                 cur_input_ids_im_replaced.append(torch.full((image_token_len_with_newline-1,), 0, device=cur_input_ids.device, dtype=cur_input_ids.dtype))
                 cur_labels_im_replaced.append(torch.full((image_token_len_with_newline,), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
 
                 cur_im_attention_mask, cur_im_position_ids = prepare_image_info(image_size, image_token_len, newline=True)
                 cur_vision_full_attention_mask, _ = prepare_image_info(image_size, image_token_len, newline=False)
-                reduce_factor = image_token_len//image_token_len_concise
-                cur_vision_full_attention_mask = cur_vision_full_attention_mask.view(image_token_len_concise, reduce_factor, image_token_len_concise, reduce_factor).permute(0, 2, 1, 3).contiguous().flatten(0,1).flatten(1,2)
+                reduce_factor = num_tokens_per_side//num_tokens_per_side_concise
+                cur_vision_full_attention_mask = cur_vision_full_attention_mask.view(num_tokens_per_side_concise, reduce_factor, num_tokens_per_side_concise, reduce_factor).permute(0, 2, 1, 3).contiguous().flatten(0,1).flatten(1,2)
                 cur_vision_full_attention_mask[cur_vision_full_attention_mask.sum(dim=1) == 0] = True
-                cur_vision_full_attention_mask = torch.cat([cur_vision_full_attention_mask, torch.ones((image_token_len_concise*image_token_len_concise, 1), dtype=cur_vision_full_attention_mask.dtype)], dim=1)
+                cur_vision_full_attention_mask = torch.cat([cur_vision_full_attention_mask, torch.ones((image_token_len_concise, 1), dtype=cur_vision_full_attention_mask.dtype)], dim=1)
                 vision_full_attention_mask.append(cur_vision_full_attention_mask)
 
                 cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
