@@ -1046,12 +1046,12 @@ def get_padding_offset(cur_size, original_size):
 
     if original_aspect_ratio > current_aspect_ratio:
         scale_factor = cur_w / original_w
-        new_height = int(original_h * scale_factor)
+        new_height = int(np.ceil(original_h * scale_factor))
         padding = (cur_h - new_height) // 2
         return 0, 0, padding, padding
     else:
         scale_factor = cur_h / original_h
-        new_width = int(original_w * scale_factor)
+        new_width = int(np.ceil(original_w * scale_factor))
         padding = (cur_w - new_width) // 2
         return padding, padding, 0, 0
 
@@ -1136,6 +1136,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
                 cur_labels_im_replaced.append(torch.full((image_token_len_with_newline,), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
 
                 cur_im_attention_mask, cur_im_position_ids = prepare_image_info(image_size, image_token_len, newline=True)
+                cur_vision_full_attention_mask, _ = prepare_image_info(image_size, image_token_len, newline=False)
 
                 cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
                 cur_im_position_ids_concise += index
