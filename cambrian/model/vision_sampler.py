@@ -440,11 +440,11 @@ class VisionMLP(nn.Module):
 			nn.SiLU(),
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
-		self.layernorm_pre = LlamaRMSNorm(intermediate_size*2, eps=config.rms_norm_eps)
-		# self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+		# self.layernorm_pre = LlamaRMSNorm(intermediate_size*2, eps=config.rms_norm_eps)
+		self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
-		# self.layernorm_pre = nn.Identity()
-		self.layernorm_post  = nn.Identity()
+		self.layernorm_pre = nn.Identity()
+		# self.layernorm_post  = nn.Identity()
 
 	def forward(self, input_embed, context, side_len_input, side_len_context):
 		bs = input_embed.shape[0]
