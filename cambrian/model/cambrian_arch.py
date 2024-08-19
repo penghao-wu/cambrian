@@ -86,7 +86,7 @@ class CambrianMetaModel:
                     )
                 
                 self.vision_sampler_layers = nn.ModuleList(
-                    [VisionMLP(config) for layer_idx in range(0, config.num_hidden_layers)]
+                    [VisionSA(config) for layer_idx in range(0, config.num_hidden_layers)]
                     )
 
     # def get_vision_tower(self):
@@ -179,7 +179,7 @@ class CambrianMetaModel:
                     torch.randn(self.config.hidden_size, dtype=self.dtype) * embed_std
                 )
                 self.vision_sampler_layers = nn.ModuleList(
-                    [VisionMLP(self.config) for layer_idx in range(0, self.config.num_hidden_layers)]
+                    [VisionSA(self.config) for layer_idx in range(0, self.config.num_hidden_layers)]
                     )
         else:
             # In case it is frozen by LoRA
