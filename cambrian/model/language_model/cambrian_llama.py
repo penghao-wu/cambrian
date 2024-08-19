@@ -59,6 +59,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		input_ids: torch.LongTensor = None,
 		attention_masks: Optional[torch.Tensor] = None,
 		attention_mask_c2f: Optional[torch.Tensor] = None,
+		vision_full_attention_mask: Optional[torch.Tensor] = None,
 		position_ids_sys: Optional[torch.LongTensor] = None,
 		position_ids_vision_concise: Optional[torch.LongTensor] = None,
 		position_ids_vision_full: Optional[torch.LongTensor] = None,
@@ -173,7 +174,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 			# hidden_states_vision_full = hidden_states_vision_concise
 			# update vision full with concise
-			hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise)
+			hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
 
 		hidden_states_text = self.norm(hidden_states_text)
 
@@ -215,6 +216,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 		input_ids: torch.LongTensor = None,
 		attention_masks: Optional[torch.Tensor] = None,
 		attention_mask_c2f: Optional[torch.Tensor] = None,
+		vision_full_attention_mask:Optional[torch.Tensor] = None,
 		position_ids_sys: Optional[torch.LongTensor] = None,
 		position_ids_vision_concise: Optional[torch.LongTensor] = None,
 		position_ids_vision_full: Optional[torch.LongTensor] = None,
@@ -269,6 +271,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			input_ids=input_ids,
 			attention_masks=attention_masks,
 			attention_mask_c2f=attention_mask_c2f,
+			vision_full_attention_mask=vision_full_attention_mask,
 			position_ids_sys=position_ids_sys,
 			position_ids_vision_concise=position_ids_vision_concise,
 			position_ids_vision_full=position_ids_vision_full,

@@ -446,7 +446,7 @@ class VisionMLP(nn.Module):
 		self.layernorm_pre = nn.Identity()
 		# self.layernorm_post  = nn.Identity()
 
-	def forward(self, input_embed, context, side_len_input, side_len_context):
+	def forward(self, input_embed, context, side_len_input, side_len_context, attention_mask=None):
 		bs = input_embed.shape[0]
 		reduce_factor = side_len_input//side_len_context
 
@@ -504,8 +504,11 @@ class VisionSA(nn.Module):
 		context = self.context_proj(context)
 		residual = input_embed
 		input_embed = self.input_proj(input_embed)
+		
+		if attention_masks is not None:
+			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
+			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
 
-		attention_masks = torch.ones((4*36, 1, 16, 17))
 		sa_kv = torch.cat([input_embed, context], dim=1)
 		input_embed = input_embed + self.self_attention(sa_kv, input_embed, attention_masks)
 

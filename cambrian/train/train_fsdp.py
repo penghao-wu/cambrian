@@ -1102,6 +1102,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     gist_token_positions = []
     position_ids_vision_concise = []
     attention_mask_c2f = []
+    vision_full_attention_mask = []
     im_aux_attention_masks_list = [[] for _ in range(len(image_aux_token_len_list))]
     base_image_token_len_per_side = int(image_token_len**0.5)
     image_aux_token_len_per_side_list = [int(image_aux_token_len_per_side**0.5) for image_aux_token_len_per_side in image_aux_token_len_list]
@@ -1137,6 +1138,11 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
                 cur_im_attention_mask, cur_im_position_ids = prepare_image_info(image_size, image_token_len, newline=True)
                 cur_vision_full_attention_mask, _ = prepare_image_info(image_size, image_token_len, newline=False)
+                reduce_factor = image_token_len//image_token_len_concise
+                cur_vision_full_attention_mask = cur_vision_full_attention_mask.view(image_token_len_concise, reduce_factor, image_token_len_concise, reduce_factor).permute(0, 2, 1, 3).contiguous().flatten(0,1).flatten(1,2)
+                cur_vision_full_attention_mask[cur_vision_full_attention_mask.sum(dim=1) == 0] = True
+                cur_vision_full_attention_mask = torch.cat([cur_vision_full_attention_mask, torch.ones((image_token_len_concise*image_token_len_concise, 1), dtype=cur_vision_full_attention_mask.dtype)], dim=1)
+                vision_full_attention_mask.append(cur_vision_full_attention_mask)
 
                 cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
                 cur_im_position_ids_concise += index
@@ -1231,7 +1237,9 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
     position_ids_vision_full = new_position_ids[:, image_position:image_position+image_token_len_with_newline]
     position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
 
-    return new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions
+    vision_full_attention_mask = torch.stack(vision_full_attention_mask)
+
+    return new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask
 
 
 @dataclass
@@ -1289,13 +1297,14 @@ class DataCollatorForSupervisedDataset(object):
         image_sizes = [instance['image_size'] for instance in instances]
         # new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
 
-        new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
+        new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
 
         batch = dict(
             input_ids=new_input_ids,
             labels=new_labels,
             attention_masks=new_attention_masks,
             attention_mask_c2f=attention_mask_c2f,
+            vision_full_attention_mask=vision_full_attention_mask,
             position_ids_sys=position_ids_sys,
             position_ids_vision_concise=position_ids_vision_concise,
             position_ids_vision_full=position_ids_vision_full,
