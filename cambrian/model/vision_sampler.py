@@ -434,7 +434,7 @@ class VisionMLP(nn.Module):
 		super().__init__()
 		self.proj = nn.Sequential(
 			nn.Linear(config.hidden_size, intermediate_size, bias=False),
-			nn.GELU(),
+			nn.SiLU(),
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
 		self.layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
