@@ -1045,14 +1045,15 @@ def get_padding_offset(cur_size, original_size):
 
     if original_aspect_ratio > current_aspect_ratio:
         scale_factor = cur_w / original_w
-        new_height = int(original_h * scale_factor)
+        new_height = int(np.ceil(original_h * scale_factor))
         padding = (cur_h - new_height) // 2
         return 0, 0, padding, padding
     else:
         scale_factor = cur_h / original_h
-        new_width = int(original_w * scale_factor)
+        new_width = int(np.ceil(original_w * scale_factor))
         padding = (cur_w - new_width) // 2
         return padding, padding, 0, 0
+
 
 def prepare_image_info(image_size, image_token_len, newline=False):
     num_tokens_per_side = int(image_token_len**0.5)
