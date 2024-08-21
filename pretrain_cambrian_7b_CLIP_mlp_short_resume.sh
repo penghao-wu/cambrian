@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export CKPT_NAME="cambrian_7b_CLIP_mlp_576_imgmlp_shareGPT4V_pretrain" &&
 
-export CKPT_DIR="gs:/cambrian-archive/checkpoints/$CKPT_NAME" &&
+export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 export RESUME_CKPT_DIR="/home/cirrascale/checkpoints/$CKPT_NAME/checkpoint-1000" &&
 
