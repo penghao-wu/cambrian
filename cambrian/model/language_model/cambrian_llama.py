@@ -180,9 +180,9 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				image_features_full_with_newline = hidden_states_vision_full.clone()
 				image_features_full_with_newline = image_features_full_with_newline.view(bs, image_token_len_per_side, image_token_len_per_side+1, -1)
 				image_features_full = image_features_full_with_newline[:, :, :-1, :]
-				image_features_full_newline = image_features_full_with_newline[:, :, -1:, -1]
+				image_features_full_newline = image_features_full_with_newline[:, :, -1:, :]
 				reduce_factor = image_token_len_per_side // image_token_len_per_side_concise
-				image_features_concise_newline = image_features_full_newline[:, ::reduce_factor, :, -1].contiguous()
+				image_features_concise_newline = image_features_full_newline[:, ::reduce_factor, :, :].contiguous()
 
 				image_features_concise = F.interpolate(
 				image_features_full.permute(0, 3, 1, 2).contiguous().to(torch.float32),
