@@ -108,11 +108,14 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 		hidden_states = inputs_embeds
 
+		skip_layers = [_ for _ in range(15, 32)]
+		skip_layers += [0,1,2,3,4]
+
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states_text,)
 
-			if i > 0:
+			if i in skip_layers:
 
 				# [sys, vision_concise, text] to [sys, vision_full, text]
 
