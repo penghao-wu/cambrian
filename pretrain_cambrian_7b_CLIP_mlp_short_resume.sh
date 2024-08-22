@@ -58,7 +58,7 @@ python cambrian/train/train_tpu.py \
     --report_to wandb \
     --run_name $CKPT_NAME \
     --fsdp "full_shard" \
-    --fsdp_config fsdp_config.json \ 
+    --fsdp_config fsdp_config.json \
     --ignore_data_skip False \
     --train_continue True \
     --resume_from_checkpoint $RESUME_CKPT_DIR 
