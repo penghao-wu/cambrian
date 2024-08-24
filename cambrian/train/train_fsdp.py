@@ -1222,8 +1222,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
         cur_attention_masks_all2all = cur_attention_mask_c2f.clone()
         cur_attention_masks_vision2all = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_with_newline, :]
-        cur_attention_masks_vision2all = torch.cat([cur_attention_masks_vision2all[:, :, :image_position], torch.ones((1, image_token_len_with_newline, image_token_len_concise_with_newline)) * min_dtype, cur_attention_masks_vision2all[:, :, image_position:], 2])
-        cur_attention_masks_all2all = torch.cat([cur_attention_masks_all2all[:, :image_position+image_token_len_concise_with_newline], cur_attention_masks_vision2all, cur_attention_masks_all2all[:, image_position+image_token_len_concise_with_newline:], 1])
+        cur_attention_masks_vision2all = torch.cat([cur_attention_masks_vision2all[:, :, :image_position], torch.ones((1, image_token_len_with_newline, image_token_len_concise_with_newline)) * min_dtype, cur_attention_masks_vision2all[:, :, image_position:]], 2)
+        cur_attention_masks_all2all = torch.cat([cur_attention_masks_all2all[:, :image_position+image_token_len_concise_with_newline], cur_attention_masks_vision2all, cur_attention_masks_all2all[:, image_position+image_token_len_concise_with_newline:]], 1)
         
         attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
         attention_mask_c2f.append(cur_attention_mask_c2f)
