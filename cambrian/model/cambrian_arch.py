@@ -204,7 +204,7 @@ class CambrianMetaModel:
                     self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
                 self.vision_query.data = mm_projector_weights['model.vision_query']
             self.image_newline.data = mm_projector_weights['model.image_newline']
-            # self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
+            self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
 
 
 def unmask_attention_mask(mask, original_size):
