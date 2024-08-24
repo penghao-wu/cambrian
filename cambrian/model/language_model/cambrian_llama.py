@@ -113,10 +113,10 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		if inputs_embeds is None:
 			inputs_embeds = self.embed_tokens(input_ids)
 
-		# image_token_start_idx = self.config.image_position
-		# image_token_len = self.config.image_token_len
-		# image_token_len_per_side = int(image_token_len**0.5)
-		# image_token_len_newline = image_token_len + image_token_len_per_side
+		image_token_start_idx = self.config.image_position
+		image_token_len = self.config.image_token_len
+		image_token_len_per_side = int(image_token_len**0.5)
+		image_token_len_newline = image_token_len + image_token_len_per_side
 		# image_attention_mask_binary = attention_mask[:, image_token_start_idx:image_token_start_idx+image_token_len_newline]
 		# image_attention_mask_binary = image_attention_mask_binary.view(-1, 1, 1, image_token_len_newline).repeat(1, 1, image_token_len_newline, 1)
 		# image_attention_mask = torch.zeros_like(image_attention_mask_binary)
@@ -157,15 +157,31 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		latent_query_newline_num = self.config.image_token_len + image_token_len_per_side
 		vision_tokens = hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :].clone()
 
+		ee_attention_mask = attention_mask.clone()
+		bs = ee_attention_mask.shape[0]
+		min_dtype = torch.finfo(inputs_embeds.dtype).min
+		ee_attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, :] = min_dtype
+		diag_masks = torch.full((image_token_len_newline, image_token_len_newline), min_dtype, dtype=ee_attention_mask, device=ee_attention_mask.device)
+		diag_masks.fill_diagonal_(0)
+		diag_masks = diag_masks.view(1, 1, image_token_len_newline, image_token_len_newline).repeat(bs, 1, 1, 1)
+		ee_attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, image_token_start_idx:image_token_start_idx+image_token_len_newline] = diag_masks
+
+		skip_layers = [_ for _ in range(12, 32)]
+
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
+
+			if i in skip_layers:
+				cur_attention_mask = ee_attention_mask
+			else:
+				cur_attention_mask = attention_mask
 
 			if self.gradient_checkpointing and self.training:
 				layer_outputs = self._gradient_checkpointing_func(
 					decoder_layer.__call__,
 					hidden_states,
-					attention_mask,
+					cur_attention_mask,
 					position_ids,
 					past_key_values,
 					output_attentions,
@@ -174,7 +190,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 			else:
 				layer_outputs = decoder_layer(
 					hidden_states,
-					attention_mask=attention_mask,
+					attention_mask=cur_attention_mask,
 					position_ids=position_ids,
 					past_key_value=past_key_values,
 					output_attentions=output_attentions,
@@ -183,9 +199,9 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 			hidden_states = layer_outputs[0]
 
-			vision_tokens = self.vision_sampler_layers[i](vision_tokens)
+			# vision_tokens = self.vision_sampler_layers[i](vision_tokens)
 
-			hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :] = vision_tokens
+			# hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :] = vision_tokens
 
 			if not self.config.connector_only:
 
