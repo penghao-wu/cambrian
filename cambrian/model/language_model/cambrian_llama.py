@@ -121,9 +121,9 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		# skip_layers = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
 		skip_layers = [_ for _ in range(12, 32)]
 		# skip_layers = [_ for _ in range(21, 32)]
-		skip_layers += [0, 2, 4, 6, 8, 10]
+		skip_layers += [0, 1, 2, 3, 4, 5]
 
-		skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+		# skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
 
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
