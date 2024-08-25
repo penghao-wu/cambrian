@@ -180,9 +180,11 @@ class CambrianMetaModel:
                 self.image_newline = nn.Parameter(
                     torch.randn(self.config.hidden_size, dtype=self.dtype) * embed_std
                 )
-                self.vision_sampler_layers = nn.ModuleList(
-                    [VisionMLP(self.config) for layer_idx in range(0, self.config.num_hidden_layers)]
-                    )
+                # self.vision_sampler_layers = nn.ModuleList(
+                #     [VisionMLP(self.config) for layer_idx in range(0, self.config.num_hidden_layers)]
+                #     )
+                for i in range(self.config.num_hidden_layers):
+                    self.layers[i].vision_sampler_layers = VisionMLP(self.config)
         else:
             # In case it is frozen by LoRA
             for p in self.mm_projector.parameters():
