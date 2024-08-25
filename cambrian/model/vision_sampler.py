@@ -436,7 +436,7 @@ class VisionMLP(nn.Module):
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
+			nn.Linear(intermediate_size, intermediate_size, bias=False),
 			nn.SiLU(),
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
@@ -462,7 +462,8 @@ class VisionMLP(nn.Module):
 		context = self.context_proj(context)
 		residual = input_embed
 		input_embed = self.input_proj(input_embed)
-		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
+		# input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
+		input_embed = input_embed + context
 		input_embed = self.layernorm_post(self.proj(input_embed) + residual) 
 		
 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
