@@ -89,7 +89,7 @@ class CambrianMetaModel:
                 #     [VisionMLP(config) for layer_idx in range(0, config.num_hidden_layers)]
                 #     )
                 for i in range(config.num_hidden_layers):
-                    self.layers.vision_sampler_layers = VisionMLP(config)
+                    self.layers[i].vision_sampler_layers = VisionMLP(config)
 
     # def get_vision_tower(self):
     #     vision_tower = getattr(self, 'vision_tower', None)
