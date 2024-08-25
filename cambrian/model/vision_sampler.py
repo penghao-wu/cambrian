@@ -748,7 +748,7 @@ def decoder_forward(
 		if vision_full is not None:
 			vision_concise = hidden_states[:, vision_concise_index[0]:vision_concise_index[1]]
 			vision_full = self.vision_sampler_layers(vision_full, vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
-			hidden_states = torch.cat([hidden_states, vision_full])
+			hidden_states = torch.cat([hidden_states, vision_full], 1)
 
 		# Fully Connected
 		residual = hidden_states
