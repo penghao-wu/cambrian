@@ -59,11 +59,14 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 
 class CrossAttention(nn.Module):
 
-	def __init__(self, q_dim, kv_dim, hidden_dim, num_heads, attention_bias=False):
+	def __init__(self, q_dim, kv_dim, hidden_dim, num_heads, out_dim=None, attention_bias=False):
 		super().__init__()
 		self.hidden_dim = hidden_dim
 		self.num_heads = num_heads
 		self.head_dim = self.hidden_dim // self.num_heads
+
+		if out_dim is None:
+			out_dim = q_dim
 
 		if (self.head_dim * self.num_heads) != self.hidden_dim:
 			raise ValueError(
@@ -71,10 +74,10 @@ class CrossAttention(nn.Module):
 				f" and `num_heads`: {self.num_heads})."
 			)
 
-		self.q_proj = nn.Sequential(nn.LayerNorm(q_dim), nn.Linear(q_dim, self.num_heads * self.head_dim, bias=attention_bias))
-		self.k_proj = nn.Sequential(nn.LayerNorm(kv_dim), nn.Linear(kv_dim, self.num_heads * self.head_dim, bias=attention_bias))
-		self.v_proj = nn.Sequential(nn.LayerNorm(kv_dim), nn.Linear(kv_dim, self.num_heads * self.head_dim, bias=attention_bias))
-		self.o_proj = nn.Linear(self.num_heads * self.head_dim, q_dim, bias=attention_bias)
+		self.q_proj = nn.Sequential(nn.Linear(q_dim, self.num_heads * self.head_dim, bias=attention_bias))
+		self.k_proj = nn.Sequential(nn.Linear(kv_dim, self.num_heads * self.head_dim, bias=attention_bias))
+		self.v_proj = nn.Sequential(nn.Linear(kv_dim, self.num_heads * self.head_dim, bias=attention_bias))
+		self.o_proj = nn.Linear(self.num_heads * self.head_dim, out_dim, bias=attention_bias)
 
 	def forward(
 		self,
@@ -436,7 +439,7 @@ class VisionMLP(nn.Module):
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size, intermediate_size, bias=False),
+			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
 			nn.SiLU(),
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
@@ -462,8 +465,8 @@ class VisionMLP(nn.Module):
 		context = self.context_proj(context)
 		residual = input_embed
 		input_embed = self.input_proj(input_embed)
-		# input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
-		input_embed = input_embed + context
+		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
+		# input_embed = input_embed + context
 		input_embed = self.layernorm_post(self.proj(input_embed) + residual) 
 		
 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
@@ -476,22 +479,70 @@ class VisionMLP(nn.Module):
 	
 
 
+# class VisionSA(nn.Module):
+# 	def __init__(self, config, intermediate_size=1024):
+# 		super().__init__()
+# 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		self.proj = nn.Sequential(
+# 			nn.Linear(intermediate_size, intermediate_size, bias=False),
+# 			nn.SiLU(),
+# 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
+# 		)
+# 		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16)
+# 		self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+
+# 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
+# 		bs = input_embed.shape[0]
+# 		reduce_factor = side_len_input//side_len_context
+
+# 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
+# 		context = context.view(bs, side_len_context, side_len_context+1, -1)
+
+# 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+# 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 2).flatten(1, 2)
+
+# 		context_newline = context[:, :, -1:]
+# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
+
+# 		context = self.context_proj(context)
+# 		residual = input_embed
+# 		input_embed = self.input_proj(input_embed)
+		
+# 		if attention_masks is not None:
+# 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
+# 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
+
+# 		sa_kv = torch.cat([input_embed, context], dim=1)
+# 		input_embed = input_embed + self.self_attention(sa_kv, input_embed, attention_masks)
+
+# 		input_embed = self.proj(input_embed) + residual
+		
+# 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
+
+# 		input_embed = self.layernorm_post(input_embed)
+
+# 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
+
+# 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
+
+# 		return input_embed
+	
+
 class VisionSA(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size, intermediate_size, bias=False),
-			nn.SiLU(),
-			nn.Linear(intermediate_size, config.hidden_size, bias=False)
-		)
-		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16)
-		self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16, config.hidden_size)
+		self.layernorm_pre = LlamaRMSNorm(intermediate_size, eps=config.rms_norm_eps)
+		# self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
 		bs = input_embed.shape[0]
 		reduce_factor = side_len_input//side_len_context
+
+		input_embed = self.layernorm_pre(input_embed)
 
 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
 		context = context.view(bs, side_len_context, side_len_context+1, -1)
@@ -503,7 +554,6 @@ class VisionSA(nn.Module):
 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
 
 		context = self.context_proj(context)
-		residual = input_embed
 		input_embed = self.input_proj(input_embed)
 		
 		if attention_masks is not None:
@@ -513,18 +563,13 @@ class VisionSA(nn.Module):
 		sa_kv = torch.cat([input_embed, context], dim=1)
 		input_embed = input_embed + self.self_attention(sa_kv, input_embed, attention_masks)
 
-		input_embed = self.proj(input_embed) + residual
-		
-		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
-
-		input_embed = self.layernorm_post(input_embed)
-
 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
 
 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
 
 		return input_embed
-	
+
+
 class CrossNorm(nn.Module):
     def __init__(self, C, epsilon=1e-5, affine=False):
         super(CrossNorm, self).__init__()
@@ -672,6 +717,11 @@ def decoder_forward(
 	attention_mask = None,
 	position_ids_q = None,
 	position_ids_kv = None,
+	vision_full = None, 
+	vision_concise_index = None,
+	image_token_len_per_side = None,
+	image_token_len_per_side_concise = None,
+	vision_full_attention_mask = None,
 	past_key_value = None,
 	output_attentions = False,
 	use_cache = False,
@@ -694,6 +744,11 @@ def decoder_forward(
 			**kwargs,
 		)
 		hidden_states = residual + hidden_states
+
+		if vision_full is not None:
+			vision_concise = hidden_states[:, vision_concise_index[0]:vision_concise_index[1]]
+			vision_full = self.vision_sampler_layers(vision_full, vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+			hidden_states = torch.cat([hidden_states, vision_full])
 
 		# Fully Connected
 		residual = hidden_states

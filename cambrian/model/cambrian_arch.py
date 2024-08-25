@@ -85,9 +85,11 @@ class CambrianMetaModel:
                         torch.empty(config.hidden_size, dtype=self.dtype)
                     )
                 
-                self.vision_sampler_layers = nn.ModuleList(
-                    [VisionMLP(config) for layer_idx in range(0, config.num_hidden_layers)]
-                    )
+                # self.vision_sampler_layers = nn.ModuleList(
+                #     [VisionMLP(config) for layer_idx in range(0, config.num_hidden_layers)]
+                #     )
+                for i in range(config.num_hidden_layers):
+                    self.layers.vision_sampler_layers = VisionMLP(config)
 
     # def get_vision_tower(self):
     #     vision_tower = getattr(self, 'vision_tower', None)
