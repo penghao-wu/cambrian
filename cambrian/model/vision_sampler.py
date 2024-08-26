@@ -535,13 +535,13 @@ class VisionSA(nn.Module):
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16, config.hidden_size)
-		self.layernorm_pre = LlamaRMSNorm(intermediate_size, eps=config.rms_norm_eps)
+		self.layernorm_pre = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 		# self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
 		bs = input_embed.shape[0]
 		reduce_factor = side_len_input//side_len_context
-
+		residual = input_embed
 		input_embed = self.layernorm_pre(input_embed)
 
 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
@@ -561,7 +561,7 @@ class VisionSA(nn.Module):
 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
 
 		sa_kv = torch.cat([input_embed, context], dim=1)
-		input_embed = input_embed + self.self_attention(sa_kv, input_embed, attention_masks)
+		input_embed = residual + self.self_attention(sa_kv, input_embed, attention_masks)
 
 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
 
