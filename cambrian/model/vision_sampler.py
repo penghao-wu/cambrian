@@ -547,8 +547,9 @@ class VisionSA(nn.Module):
 		context = context.view(bs, side_len_context, side_len_context+1, -1)
 
 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
-		residual = input_embed.flatten(1,2)
+		
 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 2).flatten(1, 2)
+		residual = input_embed.flatten(1,2)
 
 		context_newline = context[:, :, -1:]
 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
@@ -561,8 +562,7 @@ class VisionSA(nn.Module):
 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
 
 		sa_kv = torch.cat([input_embed, context], dim=1)
-		input_embed = self.self_attention(sa_kv, input_embed, attention_masks)
-		assert False, (residual.shape, input_embed.shape)
+		input_embed = self.self_attention(sa_kv, input_embed, attention_masks) + residual
 
 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
 
