@@ -559,7 +559,8 @@ class VisionSA(nn.Module):
 		context = self.context_proj(context)
 		input_embed = self.input_proj(input_embed)
 
-		input_embed = self.cat_proj([context, input_embed], -1)
+		input_embed = torch.cat([[context, input_embed], -1])
+		input_embed = self.cat_proj(input_embed)
 		
 		if attention_masks is not None:
 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
