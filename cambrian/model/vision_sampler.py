@@ -120,7 +120,6 @@ class CrossAttention(nn.Module):
 		attn_output = attn_output.reshape(bsz, q_len, self.hidden_dim)
 
 		attn_output = self.o_proj(attn_output)
-		assert False, attn_output.shape
 		return attn_output
 	
 
@@ -541,13 +540,14 @@ class VisionSA(nn.Module):
 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
 		bs = input_embed.shape[0]
 		reduce_factor = side_len_input//side_len_context
-		residual = input_embed
+		
 		input_embed = self.layernorm_pre(input_embed)
 
 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
 		context = context.view(bs, side_len_context, side_len_context+1, -1)
 
 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+		residual = input_embed
 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 2).flatten(1, 2)
 
 		context_newline = context[:, :, -1:]
@@ -561,7 +561,7 @@ class VisionSA(nn.Module):
 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
 
 		sa_kv = torch.cat([input_embed, context], dim=1)
-		input_embed = residual + self.self_attention(sa_kv, input_embed, attention_masks)
+		input_embed = residual.flatten(1,2) + self.self_attention(sa_kv, input_embed, attention_masks)
 
 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
 
