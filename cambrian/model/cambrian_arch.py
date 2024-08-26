@@ -184,7 +184,7 @@ class CambrianMetaModel:
                 #     [VisionMLP(self.config) for layer_idx in range(0, self.config.num_hidden_layers)]
                 #     )
                 for i in range(self.config.num_hidden_layers):
-                    self.layers[i].vision_sampler_layers = VisionMLP(self.config)
+                    self.layers[i].vision_sampler_layers = VisionSA(self.config)
         else:
             # In case it is frozen by LoRA
             for p in self.mm_projector.parameters():
@@ -209,8 +209,8 @@ class CambrianMetaModel:
                 self.vision_query.data = mm_projector_weights['model.vision_query']
             self.image_newline.data = mm_projector_weights['model.image_newline']
 
-            for i in range(self.config.num_hidden_layers):
-                self.layers[i].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
+            # for i in range(self.config.num_hidden_layers):
+            #     self.layers[i].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
             # self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
 
 
