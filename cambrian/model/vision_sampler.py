@@ -120,7 +120,7 @@ class CrossAttention(nn.Module):
 		attn_output = attn_output.reshape(bsz, q_len, self.hidden_dim)
 
 		attn_output = self.o_proj(attn_output)
-
+		assert False, attn_output.shape
 		return attn_output
 	
 
