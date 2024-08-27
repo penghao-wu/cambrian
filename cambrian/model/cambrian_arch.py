@@ -297,7 +297,7 @@ class CambrianMetaForCausalLM(ABC):
         bs = vision_feature_full.shape[0]
         context_feature = vision_feature_full.view(bs, height_full*width_full, -1).mean(1).view(bs, 1, 1, -1)
         context_feature = context_feature.repeat(1, height_concise*width_concise, 1, 1).flatten(0,1)
-        vision_feature_full_rearranged = vision_feature_full.view(bs, height_full, reduce_factor, width_full, reduce_factor, -1)
+        vision_feature_full_rearranged = vision_feature_full.view(bs, height_concise, reduce_factor, width_concise, reduce_factor, -1)
         vision_feature_full_rearranged = vision_feature_full_rearranged.permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0,2).flatten(1,2)
 
         sva_attention_masks = vision_full_attention_mask.view(bs*height_concise*width_concise, reduce_factor*reduce_factor+1)[:,:-1]
