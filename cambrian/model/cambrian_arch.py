@@ -190,7 +190,7 @@ class CambrianMetaModel:
 
                 vision_embed_std = 1 / torch.sqrt(torch.tensor(self.config.hidden_size, dtype=self.dtype))
                 self.vision_query = nn.Parameter(
-                    torch.randn((num_query_group, vision_hidden_size), dtype=self.dtype) * vision_embed_std
+                    torch.randn((num_query_group, self.config.hidden_size), dtype=self.dtype) * vision_embed_std
                 )
                 self.vision_sampler = VisionTokenSampler(self.config.hidden_size, self.config.hidden_size, [self.config.hidden_size], [4], vision_hidden_size, 3)
         else:
