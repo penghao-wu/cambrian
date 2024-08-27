@@ -188,14 +188,14 @@ class CambrianMetaModel:
                 for i in range(self.config.num_hidden_layers):
                     self.layers[i].vision_sampler_layers = VisionMLP(self.config)
 
-                self.mm_projector_aux_0 = nn.Linear(self.config.hidden_size, vision_hidden_size)
-                self.mm_projector_aux_1 = nn.Linear(vision_hidden_size, self.config.hidden_size)
+                # self.mm_projector_aux_0 = nn.Linear(self.config.hidden_size, vision_hidden_size)
+                # self.mm_projector_aux_1 = nn.Linear(vision_hidden_size, self.config.hidden_size)
 
-                vision_embed_std = 1 / torch.sqrt(torch.tensor(self.config.hidden_size, dtype=self.dtype))
-                self.vision_query = nn.Parameter(
-                    torch.randn((num_query_group, vision_hidden_size), dtype=self.dtype) * vision_embed_std
-                )
-                self.vision_sampler = VisionTokenSampler(vision_hidden_size, vision_hidden_size, [vision_hidden_size], [4], vision_hidden_size, 3)
+                # vision_embed_std = 1 / torch.sqrt(torch.tensor(self.config.hidden_size, dtype=self.dtype))
+                # self.vision_query = nn.Parameter(
+                #     torch.randn((num_query_group, vision_hidden_size), dtype=self.dtype) * vision_embed_std
+                # )
+                # self.vision_sampler = VisionTokenSampler(vision_hidden_size, vision_hidden_size, [vision_hidden_size], [4], vision_hidden_size, 3)
         else:
             # In case it is frozen by LoRA
             for p in self.mm_projector.parameters():
@@ -222,10 +222,10 @@ class CambrianMetaModel:
 
             for i in range(self.config.num_hidden_layers):
                 self.layers[i].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
-            self.vision_query.data = mm_projector_weights['model.vision_query']
-            self.mm_projector_aux_0.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_0'),strict=True)
-            self.mm_projector_aux_1.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_1'),strict=True)
-            self.vision_sampler.load_state_dict(get_w(mm_projector_weights, 'vision_sampler'),strict=True)
+            # self.vision_query.data = mm_projector_weights['model.vision_query']
+            # self.mm_projector_aux_0.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_0'),strict=True)
+            # self.mm_projector_aux_1.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_1'),strict=True)
+            # self.vision_sampler.load_state_dict(get_w(mm_projector_weights, 'vision_sampler'),strict=True)
             # self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
 
 
@@ -465,15 +465,15 @@ class CambrianMetaForCausalLM(ABC):
         image_features = self.get_model().mm_projector(image_features).to(dtype)
 
 
-        image_features_concise = self.prepare_concise_feature_sva(image_features, vision_full_attention_mask, (final_height, final_width), (final_height_concise, final_width_concise)).to(image_features.dtype).flatten(1, 2)
+        # image_features_concise = self.prepare_concise_feature_sva(image_features, vision_full_attention_mask, (final_height, final_width), (final_height_concise, final_width_concise)).to(image_features.dtype).flatten(1, 2)
 
-        # image_features_concise = F.interpolate(
-        #         image_features.view(bs, final_height, final_width, -1).permute(0, 3, 1, 2).contiguous().to(torch.float32),
-        #         size=(final_height_concise, final_width_concise),
-        #         mode='bilinear',
-        #         align_corners=False
-        #     ).to(image_features.dtype)
-        # image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
+        image_features_concise = F.interpolate(
+                image_features.view(bs, final_height, final_width, -1).permute(0, 3, 1, 2).contiguous().to(torch.float32),
+                size=(final_height_concise, final_width_concise),
+                mode='bilinear',
+                align_corners=False
+            ).to(image_features.dtype)
+        image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
 
         if IS_XLA_AVAILABLE:
             image_features = image_features.view(bs, final_height, final_width, -1)
