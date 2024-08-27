@@ -338,6 +338,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 				input_ids,
 				images,
 				image_aux_attention_masks_list,
+				vision_full_attention_mask,
 				image_sizes
 			)
 		if IS_XLA_AVAILABLE:

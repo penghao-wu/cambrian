@@ -91,6 +91,8 @@ class CambrianMetaModel:
                 for i in range(config.num_hidden_layers):
                     self.layers[i].vision_sampler_layers = VisionMLP(config)
 
+                # self.vision_sampler = VisionTokenSampler(config.hidden_size, config.hidden_size, [config.hidden_size], [4], vision_hidden_size, 3)
+
     # def get_vision_tower(self):
     #     vision_tower = getattr(self, 'vision_tower', None)
     #     if type(vision_tower) is list:
@@ -184,7 +186,13 @@ class CambrianMetaModel:
                 #     [VisionMLP(self.config) for layer_idx in range(0, self.config.num_hidden_layers)]
                 #     )
                 for i in range(self.config.num_hidden_layers):
-                    self.layers[i].vision_sampler_layers = VisionSA(self.config)
+                    self.layers[i].vision_sampler_layers = VisionMLP(self.config)
+
+                vision_embed_std = 1 / torch.sqrt(torch.tensor(self.config.hidden_size, dtype=self.dtype))
+                self.vision_query = nn.Parameter(
+                    torch.randn((num_query_group, vision_hidden_size), dtype=self.dtype) * vision_embed_std
+                )
+                self.vision_sampler = VisionTokenSampler(self.config.hidden_size, self.config.hidden_size, [self.config.hidden_size], [4], vision_hidden_size, 3)
         else:
             # In case it is frozen by LoRA
             for p in self.mm_projector.parameters():
@@ -281,6 +289,25 @@ class CambrianMetaForCausalLM(ABC):
 
     def get_vision_tower_aux_list(self):
         return self.get_model().get_vision_tower_aux_list()
+    
+    def prepare_concise_feature_sva(self, vision_feature_full, vision_full_attention_mask, size_full, size_concise):
+        height_full, width_full = size_full
+        height_concise, width_concise = size_concise
+        reduce_factor = (height_full//height_concise)
+        bs = vision_feature_full.shape[0]
+        context_feature = vision_feature_full.mean(1,2).view(bs, 1, 1, -1).repeat(1, height_concise*width_concise, 1, -1).flatten(0,1)
+        vision_feature_full_rearranged = vision_feature_full.view(bs, height_full, reduce_factor, width_full, reduce_factor, -1)
+        vision_feature_full_rearranged = vision_feature_full_rearranged.permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0,2).flatten(1,2)
+
+        sva_attention_masks = vision_full_attention_mask.view(bs*height_concise*width_concise, reduce_factor*reduce_factor+1)[:,:-1]
+
+
+        query_features = self.get_model().vision_query.view(1, 1, 1, -1).expand(bs, height_concise*width_concise, -1, -1).flatten(0,1)
+
+        vision_feature_concise = self.get_model().vision_sampler(query_features, context_feature, None, vision_feature_full_rearranged, sva_attention_masks)
+
+        return vision_feature_concise
+
 
     def rearrange_vision_tower_features_train(self, vision_tower_aux_feature_list, vision_tower_aux_attention_masks_list, query_side_len):
         vision_tower_aux_feature_rearranged_list = []
@@ -353,7 +380,7 @@ class CambrianMetaForCausalLM(ABC):
 
     def prepare_inputs_labels_for_multimodal(
         self, input_ids,
-        images, image_aux_attention_masks_list=None, image_sizes=None
+        images, image_aux_attention_masks_list=None, vision_full_attention_mask=None, image_sizes=None
     ):
         # vision_tower = self.get_vision_tower()
         vision_tower_aux_list = self.get_model().get_vision_tower_aux_list()
@@ -426,13 +453,16 @@ class CambrianMetaForCausalLM(ABC):
         image_features = torch.cat(final_image_features_list, -1)
         image_features = self.get_model().mm_projector(image_features).to(dtype)
 
-        image_features_concise = F.interpolate(
-                image_features.view(bs, final_height, final_width, -1).permute(0, 3, 1, 2).contiguous().to(torch.float32),
-                size=(final_height_concise, final_width_concise),
-                mode='bilinear',
-                align_corners=False
-            ).to(image_features.dtype)
-        image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
+
+        image_features_concise = self.prepare_concise_feature_sva(image_features, vision_full_attention_mask, (final_height, final_width), (final_height_concise, final_width_concise)).to(image_features.dtype).flatten(1, 2)
+
+        # image_features_concise = F.interpolate(
+        #         image_features.view(bs, final_height, final_width, -1).permute(0, 3, 1, 2).contiguous().to(torch.float32),
+        #         size=(final_height_concise, final_width_concise),
+        #         mode='bilinear',
+        #         align_corners=False
+        #     ).to(image_features.dtype)
+        # image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
 
         if IS_XLA_AVAILABLE:
             image_features = image_features.view(bs, final_height, final_width, -1)

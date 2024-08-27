@@ -270,8 +270,8 @@ class VisionCrossAttentionLayer(nn.Module):
 		self.kv_size_list = kv_size_list
 		for i, kv_size in enumerate(kv_size_list):
 			if kv_size > 1:
-				setattr(self, "pos_embed_{}".format(i), nn.Parameter(torch.randn(kv_size**2, hidden_dim)))
-				# self.register_buffer("pos_embed_{}".format(i), torch.from_numpy(get_2d_sincos_pos_embed(hidden_dim, kv_size)).float(), persistent=False)
+				# setattr(self, "pos_embed_{}".format(i), nn.Parameter(torch.randn(kv_size**2, hidden_dim)))
+				self.register_buffer("pos_embed_{}".format(i), torch.from_numpy(get_2d_sincos_pos_embed(hidden_dim, kv_size)).float(), persistent=False)
 
 	def forward(
 		self,
