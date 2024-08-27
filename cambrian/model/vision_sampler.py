@@ -280,7 +280,7 @@ class VisionCrossAttentionLayer(nn.Module):
 		gist_token=None,
 		*vision_latents_attention_mask_list,
 	) -> torch.FloatTensor:
-
+		assert False, (queries.shape, context_feature.shape, vision_latents_attention_mask_list[0].shape, vision_latents_attention_mask_list[1].shape)
 		residual = queries
 		# queries = self.proj_in(queries)
 		context_feature = self.proj_context(context_feature)
