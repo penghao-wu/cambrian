@@ -189,7 +189,7 @@ class CambrianMetaModel:
                     self.layers[i].vision_sampler_layers = VisionMLP(self.config)
 
                 self.mm_projector_aux_0 = nn.Linear(self.config.hidden_size, vision_hidden_size)
-                self.mm_projector_aux_1 = nn.Linear(self.config.hidden_size, self.config.hidden_size)
+                self.mm_projector_aux_1 = nn.Linear(vision_hidden_size, self.config.hidden_size)
 
                 vision_embed_std = 1 / torch.sqrt(torch.tensor(self.config.hidden_size, dtype=self.dtype))
                 self.vision_query = nn.Parameter(
