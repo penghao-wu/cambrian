@@ -188,11 +188,14 @@ class CambrianMetaModel:
                 for i in range(self.config.num_hidden_layers):
                     self.layers[i].vision_sampler_layers = VisionMLP(self.config)
 
+                self.mm_projector_aux_0 = nn.Linear(self.config.hidden_size, vision_hidden_size)
+                self.mm_projector_aux_1 = nn.Linear(self.config.hidden_size, self.config.hidden_size)
+
                 vision_embed_std = 1 / torch.sqrt(torch.tensor(self.config.hidden_size, dtype=self.dtype))
                 self.vision_query = nn.Parameter(
-                    torch.randn((num_query_group, self.config.hidden_size), dtype=self.dtype) * vision_embed_std
+                    torch.randn((num_query_group, vision_hidden_size), dtype=self.dtype) * vision_embed_std
                 )
-                self.vision_sampler = VisionTokenSampler(self.config.hidden_size, self.config.hidden_size, [self.config.hidden_size], [4], vision_hidden_size, 3)
+                self.vision_sampler = VisionTokenSampler(vision_hidden_size, vision_hidden_size, [vision_hidden_size], [4], vision_hidden_size, 3)
         else:
             # In case it is frozen by LoRA
             for p in self.mm_projector.parameters():
@@ -295,6 +298,7 @@ class CambrianMetaForCausalLM(ABC):
         height_concise, width_concise = size_concise
         reduce_factor = (height_full//height_concise)
         bs = vision_feature_full.shape[0]
+        vision_feature_full = self.get_model().mm_projector_aux_0(vision_feature_full)
         context_feature = vision_feature_full.view(bs, height_full*width_full, -1).mean(1).view(bs, 1, 1, -1)
         context_feature = context_feature.repeat(1, height_concise*width_concise, 1, 1).flatten(0,1)
         vision_feature_full_rearranged = vision_feature_full.view(bs, height_concise, reduce_factor, width_concise, reduce_factor, -1)
@@ -306,6 +310,8 @@ class CambrianMetaForCausalLM(ABC):
         query_features = self.get_model().vision_query.view(1, 1, 1, -1).expand(bs, height_concise*width_concise, -1, -1).flatten(0,1)
 
         vision_feature_concise = self.get_model().vision_sampler(query_features, context_feature, None, vision_feature_full_rearranged, sva_attention_masks)
+
+        vision_feature_concise = self.get_model().mm_projector_aux_1(vision_feature_concise)
 
         return vision_feature_concise
 
