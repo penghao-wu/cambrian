@@ -144,9 +144,9 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 						torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
 						torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1),
 						vision_full_attention_mask,
-						past_key_values=past_key_values,
-						output_attentions=output_attentions,
-						use_cache=use_cache,
+						past_key_values,
+						output_attentions,
+						use_cache,
 					)
 				else:
 					layer_outputs = decoder_layer(
@@ -156,9 +156,9 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 						torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
 						torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1),
 						vision_full_attention_mask,
-						past_key_values=past_key_values,
-						output_attentions=output_attentions,
-						use_cache=use_cache,
+						past_key_values,
+						output_attentions,
+						use_cache,
 					)
 
 				# if self.gradient_checkpointing and self.training:

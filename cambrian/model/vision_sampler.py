@@ -728,11 +728,11 @@ def decoder_forward(
 	attention_mask = None,
 	position_ids_q = None,
 	position_ids_kv = None,
-	vision_full = None, 
-	vision_concise_index = None,
-	image_token_len_per_side = None,
-	image_token_len_per_side_concise = None,
-	vision_full_attention_mask = None,
+	# vision_full = None, 
+	# vision_concise_index = None,
+	# image_token_len_per_side = None,
+	# image_token_len_per_side_concise = None,
+	# vision_full_attention_mask = None,
 	past_key_value = None,
 	output_attentions = False,
 	use_cache = False,
@@ -756,10 +756,10 @@ def decoder_forward(
 		)
 		hidden_states = residual + hidden_states
 
-		if vision_full is not None:
-			vision_concise = hidden_states[:, vision_concise_index[0]:vision_concise_index[1]]
-			vision_full = self.vision_sampler_layers(vision_full, vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
-			hidden_states = torch.cat([hidden_states, vision_full], 1)
+		# if vision_full is not None:
+		# 	vision_concise = hidden_states[:, vision_concise_index[0]:vision_concise_index[1]]
+		# 	vision_full = self.vision_sampler_layers(vision_full, vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+		# 	hidden_states = torch.cat([hidden_states, vision_full], 1)
 
 		# Fully Connected
 		residual = hidden_states
