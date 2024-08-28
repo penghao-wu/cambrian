@@ -1195,7 +1195,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 		min_dtype = torch.finfo(torch.bfloat16).min
 
 		cur_attention_mask_im_concise_full = torch.cat([cur_im_attention_mask_concise, cur_attention_mask_im_replaced])
-		cur_attention_mask_im_concise_full = (1-cur_attention_mask_im_concise_full)*min_dtype
+		# cur_attention_mask_im_concise_full = (1-cur_attention_mask_im_concise_full)*min_dtype
+		cur_attention_mask_im_concise_full = torch.where(cur_attention_mask_im_concise_full, 0, min_dtype)
 		cur_attention_mask_im_concise_full = cur_attention_mask_im_concise_full.view(1, 1, -1)
 
 		cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
@@ -1216,7 +1217,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
 		# concise to all
 		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] # concise to sys
-		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise # concise to concise
+		# cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise # concise to concise
 		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline+image_token_len_with_newline] = cur_attention_mask_im_concise_full.repeat(1, image_token_len_concise_with_newline, 1)
 
 		# text to all
