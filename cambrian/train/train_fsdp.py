@@ -1095,163 +1095,168 @@ def combine_causal_attention_mask(seq_len, attention_mask, dtype=torch.bfloat16)
     
 
 def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len=576, image_token_len_concise=36, image_aux_token_len_list=[192*192], max_length=2048):
-    input_ids_im_replaced = []
-    labels_im_replaced = []
-    attention_mask_im_replaced = []
-    position_ids_im_replaced = []
-    gist_token_positions = []
-    position_ids_vision_concise = []
-    attention_mask_c2f = []
-    attention_masks_all2all = []
-    vision_full_attention_mask = []
-    im_aux_attention_masks_list = [[] for _ in range(len(image_aux_token_len_list))]
-    base_image_token_len_per_side = int(image_token_len**0.5)
-    image_aux_token_len_per_side_list = [int(image_aux_token_len_per_side**0.5) for image_aux_token_len_per_side in image_aux_token_len_list]
-    # insert the padding tokens to the places of image so we can embed them together
-    for batch_idx, cur_input_ids in enumerate(input_ids):
-        num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
-        assert num_images == 1, num_images
-        image_size = image_sizes[batch_idx]
-        
-        image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
+	input_ids_im_replaced = []
+	labels_im_replaced = []
+	attention_mask_im_replaced = []
+	position_ids_im_replaced = []
+	gist_token_positions = []
+	position_ids_vision_concise = []
+	attention_mask_c2f = []
+	attention_masks_all2all = []
+	vision_full_attention_mask = []
+	im_aux_attention_masks_list = [[] for _ in range(len(image_aux_token_len_list))]
+	base_image_token_len_per_side = int(image_token_len**0.5)
+	image_aux_token_len_per_side_list = [int(image_aux_token_len_per_side**0.5) for image_aux_token_len_per_side in image_aux_token_len_list]
+	# insert the padding tokens to the places of image so we can embed them together
+	for batch_idx, cur_input_ids in enumerate(input_ids):
+		num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
+		assert num_images == 1, num_images
+		image_size = image_sizes[batch_idx]
+		
+		image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
 
-        cur_input_ids_im_replaced = []
-        cur_labels_im_replaced = []
-        cur_attention_mask_im_replaced = []
-        cur_position_ids_im_replaced = []
-        
-        cur_labels = labels[batch_idx]
-        cur_attention_mask = attention_mask[batch_idx]
-        index = 0
-        for i in range(len(image_token_indices) - 1):
-            # still keep the first image token in input_ids for further use
-            cur_input_ids_im_replaced.append(cur_input_ids[image_token_indices[i]+1:image_token_indices[i+1]+1])
-            cur_labels_im_replaced.append(cur_labels[image_token_indices[i]+1:image_token_indices[i+1]])
-            cur_attention_mask_im_replaced.append(cur_attention_mask[image_token_indices[i]+1:image_token_indices[i+1]])
-            cur_position_ids_im_replaced.append(torch.arange(index, index+image_token_indices[i+1]-(image_token_indices[i]+1), dtype=torch.long, device=cur_input_ids.device))
-            index += image_token_indices[i+1]-(image_token_indices[i]+1)
-            
-            if i < len(image_token_indices) - 2:
-                num_tokens_per_side = int(image_token_len**0.5)
-                num_tokens_per_side_concise = int(image_token_len_concise**0.5)
-                image_token_len_with_newline = image_token_len + num_tokens_per_side
-                cur_input_ids_im_replaced.append(torch.full((image_token_len_with_newline-1,), 0, device=cur_input_ids.device, dtype=cur_input_ids.dtype))
-                cur_labels_im_replaced.append(torch.full((image_token_len_with_newline,), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
+		cur_input_ids_im_replaced = []
+		cur_labels_im_replaced = []
+		cur_attention_mask_im_replaced = []
+		cur_position_ids_im_replaced = []
+		
+		cur_labels = labels[batch_idx]
+		cur_attention_mask = attention_mask[batch_idx]
+		index = 0
+		for i in range(len(image_token_indices) - 1):
+			# still keep the first image token in input_ids for further use
+			cur_input_ids_im_replaced.append(cur_input_ids[image_token_indices[i]+1:image_token_indices[i+1]+1])
+			cur_labels_im_replaced.append(cur_labels[image_token_indices[i]+1:image_token_indices[i+1]])
+			cur_attention_mask_im_replaced.append(cur_attention_mask[image_token_indices[i]+1:image_token_indices[i+1]])
+			cur_position_ids_im_replaced.append(torch.arange(index, index+image_token_indices[i+1]-(image_token_indices[i]+1), dtype=torch.long, device=cur_input_ids.device))
+			index += image_token_indices[i+1]-(image_token_indices[i]+1)
+			
+			if i < len(image_token_indices) - 2:
+				num_tokens_per_side = int(image_token_len**0.5)
+				num_tokens_per_side_concise = int(image_token_len_concise**0.5)
+				image_token_len_with_newline = image_token_len + num_tokens_per_side
+				cur_input_ids_im_replaced.append(torch.full((image_token_len_with_newline-1,), 0, device=cur_input_ids.device, dtype=cur_input_ids.dtype))
+				cur_labels_im_replaced.append(torch.full((image_token_len_with_newline,), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
 
-                cur_im_attention_mask, cur_im_position_ids = prepare_image_info(image_size, image_token_len, newline=True)
-                cur_vision_full_attention_mask, _ = prepare_image_info(image_size, image_token_len, newline=False)
-                reduce_factor = num_tokens_per_side//num_tokens_per_side_concise
-                cur_vision_full_attention_mask = cur_vision_full_attention_mask.view(num_tokens_per_side_concise, reduce_factor, num_tokens_per_side_concise, reduce_factor).permute(0, 2, 1, 3).contiguous().flatten(0,1).flatten(1,2)
-                cur_vision_full_attention_mask[cur_vision_full_attention_mask.sum(dim=1) == 0] = True
-                cur_vision_full_attention_mask = torch.cat([cur_vision_full_attention_mask, torch.ones((image_token_len_concise, 1), dtype=cur_vision_full_attention_mask.dtype)], dim=1)
-                vision_full_attention_mask.append(cur_vision_full_attention_mask)
+				cur_im_attention_mask, cur_im_position_ids = prepare_image_info(image_size, image_token_len, newline=True)
+				cur_vision_full_attention_mask, _ = prepare_image_info(image_size, image_token_len, newline=False)
+				reduce_factor = num_tokens_per_side//num_tokens_per_side_concise
+				cur_vision_full_attention_mask = cur_vision_full_attention_mask.view(num_tokens_per_side_concise, reduce_factor, num_tokens_per_side_concise, reduce_factor).permute(0, 2, 1, 3).contiguous().flatten(0,1).flatten(1,2)
+				cur_vision_full_attention_mask[cur_vision_full_attention_mask.sum(dim=1) == 0] = True
+				cur_vision_full_attention_mask = torch.cat([cur_vision_full_attention_mask, torch.ones((image_token_len_concise, 1), dtype=cur_vision_full_attention_mask.dtype)], dim=1)
+				vision_full_attention_mask.append(cur_vision_full_attention_mask)
 
-                cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
-                cur_im_position_ids_concise += index
-                # index = cur_im_position_ids_concise.max()+1
-                position_ids_vision_concise.append(cur_im_position_ids_concise)
+				cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
+				cur_im_position_ids_concise += index
+				# index = cur_im_position_ids_concise.max()+1
+				position_ids_vision_concise.append(cur_im_position_ids_concise)
 
-                for aux_i, image_aux_token_len_per_side in enumerate(image_aux_token_len_per_side_list):
-                    assert image_aux_token_len_per_side >= base_image_token_len_per_side
-                    num_base_crops_per_aux_side = image_aux_token_len_per_side//base_image_token_len_per_side
+				for aux_i, image_aux_token_len_per_side in enumerate(image_aux_token_len_per_side_list):
+					assert image_aux_token_len_per_side >= base_image_token_len_per_side
+					num_base_crops_per_aux_side = image_aux_token_len_per_side//base_image_token_len_per_side
 
-                    cur_im_aux_attention_mask, _ = prepare_image_info(image_size, image_aux_token_len_per_side**2)
-                    cur_im_aux_attention_mask = cur_im_aux_attention_mask.view(base_image_token_len_per_side, num_base_crops_per_aux_side, base_image_token_len_per_side, num_base_crops_per_aux_side)
-                    cur_im_aux_attention_mask = cur_im_aux_attention_mask.permute(0, 2, 1, 3).contiguous().flatten(0,1).flatten(1,2)
-                    cur_im_aux_attention_mask[cur_im_aux_attention_mask.sum(dim=1) == 0] = True
-                    im_aux_attention_masks_list[aux_i].append(cur_im_aux_attention_mask)
-                cur_im_position_ids += index
-                
-                if cur_attention_mask[image_token_indices[i+1]]:
-                    cur_attention_mask_im_replaced.append(cur_im_attention_mask)
-                    cur_position_ids_im_replaced.append(cur_im_position_ids.to(torch.long))
-                    index = cur_im_position_ids.max()+1
-                else:
-                    num_tokens_per_side = int(image_token_len**0.5)
-                    image_token_len_with_newline = image_token_len + num_tokens_per_side
-                    cur_attention_mask_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_attention_mask.device, dtype=cur_attention_mask.dtype))
-                    cur_position_ids_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_input_ids.device, dtype=torch.long))
-        
-        cur_input_ids_im_replaced = torch.cat(cur_input_ids_im_replaced)[:max_length]
-        cur_labels_im_replaced = torch.cat(cur_labels_im_replaced)[:max_length]
-        cur_attention_mask_im_replaced = torch.cat(cur_attention_mask_im_replaced)[:max_length]
-        cur_position_ids_im_replaced = torch.cat(cur_position_ids_im_replaced)[:max_length]
+					cur_im_aux_attention_mask, _ = prepare_image_info(image_size, image_aux_token_len_per_side**2)
+					cur_im_aux_attention_mask = cur_im_aux_attention_mask.view(base_image_token_len_per_side, num_base_crops_per_aux_side, base_image_token_len_per_side, num_base_crops_per_aux_side)
+					cur_im_aux_attention_mask = cur_im_aux_attention_mask.permute(0, 2, 1, 3).contiguous().flatten(0,1).flatten(1,2)
+					cur_im_aux_attention_mask[cur_im_aux_attention_mask.sum(dim=1) == 0] = True
+					im_aux_attention_masks_list[aux_i].append(cur_im_aux_attention_mask)
+				cur_im_position_ids += index
+				
+				if cur_attention_mask[image_token_indices[i+1]]:
+					cur_attention_mask_im_replaced.append(cur_im_attention_mask)
+					cur_position_ids_im_replaced.append(cur_im_position_ids.to(torch.long))
+					index = cur_im_position_ids.max()+1
+				else:
+					num_tokens_per_side = int(image_token_len**0.5)
+					image_token_len_with_newline = image_token_len + num_tokens_per_side
+					cur_attention_mask_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_attention_mask.device, dtype=cur_attention_mask.dtype))
+					cur_position_ids_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_input_ids.device, dtype=torch.long))
+		
+		cur_input_ids_im_replaced = torch.cat(cur_input_ids_im_replaced)[:max_length]
+		cur_labels_im_replaced = torch.cat(cur_labels_im_replaced)[:max_length]
+		cur_attention_mask_im_replaced = torch.cat(cur_attention_mask_im_replaced)[:max_length]
+		cur_position_ids_im_replaced = torch.cat(cur_position_ids_im_replaced)[:max_length]
 
-        image_token_index = image_token_indices[1]
-        image_token_end_index = image_token_index + image_token_len_with_newline
-        first_answer_index = len(cur_labels_im_replaced)-1
-        for index_i in range(image_token_end_index, len(cur_labels_im_replaced)):
-            if cur_labels_im_replaced[index_i] != IGNORE_INDEX:
-                first_answer_index = index_i
-                break
-        gist_token_positions.append(first_answer_index-1)
+		image_token_index = image_token_indices[1]
+		image_token_end_index = image_token_index + image_token_len_with_newline
+		first_answer_index = len(cur_labels_im_replaced)-1
+		for index_i in range(image_token_end_index, len(cur_labels_im_replaced)):
+			if cur_labels_im_replaced[index_i] != IGNORE_INDEX:
+				first_answer_index = index_i
+				break
+		gist_token_positions.append(first_answer_index-1)
 
-        input_ids_im_replaced.append(cur_input_ids_im_replaced)
-        labels_im_replaced.append(cur_labels_im_replaced)
-        position_ids_im_replaced.append(cur_position_ids_im_replaced)
-        
-
-
-        min_dtype = torch.finfo(torch.bfloat16).min
-
-        cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
-        cur_im_attention_mask_concise = combine_causal_attention_mask(len(cur_im_attention_mask_concise), cur_im_attention_mask_concise)
-        num_tokens_per_side_concise = int(image_token_len_concise**0.5)
-        image_token_len_concise_with_newline = image_token_len_concise + num_tokens_per_side_concise
+		input_ids_im_replaced.append(cur_input_ids_im_replaced)
+		labels_im_replaced.append(cur_labels_im_replaced)
+		position_ids_im_replaced.append(cur_position_ids_im_replaced)
+		
 
 
-        len_sys_full_text = len(cur_input_ids_im_replaced)
-        len_sys_all = len(cur_input_ids_im_replaced) + image_token_len_concise_with_newline
-        len_sys_concise_text = len_sys_full_text + image_token_len_concise_with_newline - image_token_len_with_newline 
+		min_dtype = torch.finfo(torch.bfloat16).min
 
-        # [sys, concise, text] to [sys, concise, full, text]
-        cur_attention_mask_c2f = torch.ones((1, len_sys_concise_text, len_sys_all)) * min_dtype
+		cur_attention_mask_im_concise_full = torch.cat([cur_im_attention_mask_concise, cur_attention_mask_im_replaced])
+		cur_attention_mask_im_concise_full = (1-cur_attention_mask_im_concise_full)*min_dtype
+		cur_attention_mask_im_concise_full = cur_attention_mask_im_concise_full.view(1, 1, -1)
 
-        # sys to all
-        cur_attention_mask_c2f[:, :image_position, :image_position] = cur_attention_mask_im_replaced[:, :image_position, :image_position] # sys to sys
-
-        # concise to all
-        cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] # concise to sys
-        cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise # concise to concise
-
-        # text to all
-        cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
-        # cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
-        cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
+		cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
+		cur_im_attention_mask_concise = combine_causal_attention_mask(len(cur_im_attention_mask_concise), cur_im_attention_mask_concise)
+		num_tokens_per_side_concise = int(image_token_len_concise**0.5)
+		image_token_len_concise_with_newline = image_token_len_concise + num_tokens_per_side_concise
 
 
-        cur_attention_masks_all2all = cur_attention_mask_c2f.clone()
-        cur_attention_masks_vision2all = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_with_newline, :]
-        cur_attention_masks_vision2all = torch.cat([cur_attention_masks_vision2all[:, :, :image_position], torch.ones((1, image_token_len_with_newline, image_token_len_concise_with_newline)) * min_dtype, cur_attention_masks_vision2all[:, :, image_position:]], 2)
-        cur_attention_masks_all2all = torch.cat([cur_attention_masks_all2all[:, :image_position+image_token_len_concise_with_newline], cur_attention_masks_vision2all, cur_attention_masks_all2all[:, image_position+image_token_len_concise_with_newline:]], 1)
-        
-        attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
-        attention_mask_c2f.append(cur_attention_mask_c2f)
-        attention_masks_all2all.append(cur_attention_masks_all2all)
+		len_sys_full_text = len(cur_input_ids_im_replaced)
+		len_sys_all = len(cur_input_ids_im_replaced) + image_token_len_concise_with_newline
+		len_sys_concise_text = len_sys_full_text + image_token_len_concise_with_newline - image_token_len_with_newline 
 
-    # Truncate sequences to max length as image embeddings can make the sequence longer
-    new_input_ids = [x[0:max_length] for x in input_ids_im_replaced]
-    new_labels = [x[0:max_length] for x in labels_im_replaced]
-    new_position_ids = [x[0:max_length] for x in position_ids_im_replaced]
-    new_input_ids = torch.stack(new_input_ids)
-    new_labels = torch.stack(new_labels)
-    new_position_ids = torch.stack(new_position_ids)
-    new_attention_masks = torch.stack(attention_mask_im_replaced)
-    im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
-    gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
+		# [sys, concise, text] to [sys, concise, full, text]
+		cur_attention_mask_c2f = torch.ones((1, len_sys_concise_text, len_sys_all)) * min_dtype
 
-    attention_mask_c2f = torch.stack(attention_mask_c2f)
-    attention_masks_all2all = torch.stack(attention_masks_all2all)
+		# sys to all
+		cur_attention_mask_c2f[:, :image_position, :image_position] = cur_attention_mask_im_replaced[:, :image_position, :image_position] # sys to sys
 
-    position_ids_vision_concise = torch.stack(position_ids_vision_concise)
+		# concise to all
+		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] # concise to sys
+		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise # concise to concise
+		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline+image_token_len_with_newline] = cur_attention_mask_im_concise_full.repeat(1, image_token_len_concise_with_newline, 1)
 
-    position_ids_sys = new_position_ids[:, :image_position]
-    position_ids_vision_full = new_position_ids[:, image_position:image_position+image_token_len_with_newline]
-    position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
+		# text to all
+		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
+		# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
+		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
 
-    vision_full_attention_mask = torch.stack(vision_full_attention_mask)
 
-    return new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask
+		cur_attention_masks_all2all = cur_attention_mask_c2f.clone()
+		cur_attention_masks_vision2all = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_with_newline, :]
+		cur_attention_masks_vision2all = torch.cat([cur_attention_masks_vision2all[:, :, :image_position], torch.ones((1, image_token_len_with_newline, image_token_len_concise_with_newline)) * min_dtype, cur_attention_masks_vision2all[:, :, image_position:]], 2)
+		cur_attention_masks_all2all = torch.cat([cur_attention_masks_all2all[:, :image_position+image_token_len_concise_with_newline], cur_attention_masks_vision2all, cur_attention_masks_all2all[:, image_position+image_token_len_concise_with_newline:]], 1)
+		
+		attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
+		attention_mask_c2f.append(cur_attention_mask_c2f)
+		attention_masks_all2all.append(cur_attention_masks_all2all)
+
+	# Truncate sequences to max length as image embeddings can make the sequence longer
+	new_input_ids = [x[0:max_length] for x in input_ids_im_replaced]
+	new_labels = [x[0:max_length] for x in labels_im_replaced]
+	new_position_ids = [x[0:max_length] for x in position_ids_im_replaced]
+	new_input_ids = torch.stack(new_input_ids)
+	new_labels = torch.stack(new_labels)
+	new_position_ids = torch.stack(new_position_ids)
+	new_attention_masks = torch.stack(attention_mask_im_replaced)
+	im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
+	gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
+
+	attention_mask_c2f = torch.stack(attention_mask_c2f)
+	attention_masks_all2all = torch.stack(attention_masks_all2all)
+
+	position_ids_vision_concise = torch.stack(position_ids_vision_concise)
+
+	position_ids_sys = new_position_ids[:, :image_position]
+	position_ids_vision_full = new_position_ids[:, image_position:image_position+image_token_len_with_newline]
+	position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
+
+	vision_full_attention_mask = torch.stack(vision_full_attention_mask)
+
+	return new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask
 
 
 @dataclass
