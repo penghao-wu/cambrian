@@ -1194,8 +1194,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
 		min_dtype = torch.finfo(torch.bfloat16).min
 
-		cur_attention_mask_im_concise_full = torch.cat([cur_im_attention_mask_concise, cur_attention_mask_im_replaced])
-		# cur_attention_mask_im_concise_full = (1-cur_attention_mask_im_concise_full)*min_dtype
+		cur_attention_mask_im_concise_full = torch.cat([cur_im_attention_mask_concise, cur_im_attention_mask])
 		cur_attention_mask_im_concise_full = torch.where(cur_attention_mask_im_concise_full, 0, min_dtype)
 		cur_attention_mask_im_concise_full = cur_attention_mask_im_concise_full.view(1, 1, -1)
 
