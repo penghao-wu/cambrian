@@ -192,7 +192,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				# 		output_attentions,
 				# 		use_cache,
 				# 	)
-
+				if i > 0:
+					print(2222, i, torch.mean(hidden_states_vision_concise), torch.var(hidden_states_vision_concise), torch.mean(hidden_states_vision_full), torch.var(hidden_states_vision_full), torch.mean(hidden_states_text), torch.var(hidden_states_text))
 				hidden_states_vision_concise = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]
 				# hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:]
 				hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:vision_token_start_idx+image_token_concise_newline_num+len_txt]
