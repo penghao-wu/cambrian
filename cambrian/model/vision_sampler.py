@@ -463,7 +463,6 @@ class VisionMLP(nn.Module):
 		context = self.context_proj(context)
 		residual = input_embed
 		input_embed = self.input_proj(input_embed)
-		print(1111, torch.mean(input_embed), torch.var(input_embed), torch.mean(context), torch.var(context))
 		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
 		# input_embed = self.layernorm_pre(input_embed)
 		# input_embed = input_embed + context
