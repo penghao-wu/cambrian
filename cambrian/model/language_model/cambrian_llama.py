@@ -122,7 +122,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		# skip_layers = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
 		# skip_layers = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
 		# skip_layers = [_ for _ in range(0, 32)]
-		skip_layers = [_ for _ in range(11, 32)]
+		# skip_layers = [_ for _ in range(11, 32)]
 		# skip_layers += [0, 1, 2, 3, 4, 5]
 
 		# skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
@@ -192,15 +192,13 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				# 		output_attentions,
 				# 		use_cache,
 				# 	)
-				hidden_states_vision_concise_old = hidden_states_vision_concise
 				hidden_states_vision_concise = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]
 				# hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:]
 				hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:vision_token_start_idx+image_token_concise_newline_num+len_txt]
 				hidden_states_sys = layer_outputs[0][:, :vision_token_start_idx]
 
 				# hidden_states_vision_full = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num+len_txt:]
-				hidden_states_vision_concise_residual = hidden_states_vision_concise - hidden_states_vision_concise_old
-				hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, hidden_states_vision_concise_residual, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+				hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
 			else:
 				# if self.gradient_checkpointing and self.training:
 				# 	layer_outputs = self._gradient_checkpointing_func(

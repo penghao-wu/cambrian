@@ -447,20 +447,18 @@ class VisionMLP(nn.Module):
 		self.layernorm_pre = nn.Identity()
 		# self.layernorm_post  = nn.Identity()
 
-	def forward(self, input_embed, context, context_residual, side_len_input, side_len_context, attention_mask=None):
+	def forward(self, input_embed, context, side_len_input, side_len_context, attention_mask=None):
 		bs = input_embed.shape[0]
 		reduce_factor = side_len_input//side_len_context
 
 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
 		context = context.view(bs, side_len_context, side_len_context+1, -1)
-		context_residual = context_residual.view(bs, side_len_context, side_len_context+1, -1)
 
 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
 
 		context_newline = context[:, :, -1:]
 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
-		context_residual = context_residual[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
 
 		context = self.context_proj(context)
 		residual = input_embed
@@ -468,7 +466,7 @@ class VisionMLP(nn.Module):
 		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
 		# input_embed = self.layernorm_pre(input_embed)
 		# input_embed = input_embed + context
-		input_embed = self.layernorm_post(self.proj(input_embed) + context_residual + residual) 
+		input_embed = self.layernorm_post(self.proj(input_embed) + residual) 
 		
 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
