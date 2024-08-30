@@ -455,10 +455,18 @@ class VisionMLP(nn.Module):
 		context = context.view(bs, side_len_context, side_len_context+1, -1)
 
 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
-		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
+		# input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
 
 		context_newline = context[:, :, -1:]
-		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
+		# context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
+		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, -1)
+		context = F.interpolate(
+		context.permute(0, 3, 1, 2).contiguous().to(torch.float32),
+			size=(side_len_input, side_len_input),
+			mode='bilinear',
+			align_corners=False
+		).to(context.dtype)
+		context = context.permute(0, 2, 3, 1).contiguous()
 
 		context = self.context_proj(context)
 		residual = input_embed
@@ -468,7 +476,7 @@ class VisionMLP(nn.Module):
 		# input_embed = input_embed + context
 		input_embed = self.layernorm_post(self.proj(input_embed) + residual) 
 		
-		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
+		# input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
 
