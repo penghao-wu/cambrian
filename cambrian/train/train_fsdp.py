@@ -1220,20 +1220,21 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
 		# concise to all
 		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] # concise to sys
-		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise # concise to concise
+		# cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise # concise to concise
+		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = min_dtype # concise to concise
 		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position+image_token_len_concise_with_newline:image_position+image_token_len_concise_with_newline+image_token_len_with_newline] = cur_attention_mask_im_concise_full[:, :, image_token_len_concise_with_newline:].repeat(1, image_token_len_concise_with_newline, 1) # concise to full
 
 		# text to all
 		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
 		
-		if random.random()>0.5:
-			# see concise only
-			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
-			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline+image_token_len_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position+image_token_len_with_newline:] # text to text
+		# if random.random()>0.5:
+		# 	# see concise only
+		# 	cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
+		# 	cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline+image_token_len_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position+image_token_len_with_newline:] # text to text
 
-		else:
-			# see full only
-			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
+		# else:
+		# see full only
+		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
 			
 		# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
 		# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
