@@ -3,11 +3,11 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_36_im_nocausal_finetune_737k" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_skipall_mlp_conciseseeall_p5_576_36_finetune_737k_ep2" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
-export RESUME_CKPT_DIR="/home/cirrascale/checkpoints/$CKPT_NAME/checkpoint-1000" &&
+export RESUME_CKPT_DIR="/home/cirrascale/checkpoints/$CKPT_NAME/checkpoint-2000" &&
 
 python cambrian/train/train_tpu.py \
     --model_name_or_path lmsys/vicuna-7b-v1.5 \
@@ -15,10 +15,11 @@ python cambrian/train/train_tpu.py \
     --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
-    --vision_tower_aux_token_len_list '[36]' \
-    --image_token_len 36 \
+    --vision_tower_aux_token_len_list '[576]' \
+    --image_token_len 576 \
+    --image_token_len_concise 36 \
     --num_query_group 1 \
-    --query_num_list '[36]' \
+    --query_num_list '[576]' \
     --connector_depth 3 \
     --image_position 35 \
     --vision_hidden_size 1024 \
@@ -35,8 +36,8 @@ python cambrian/train/train_tpu.py \
     --group_by_modality_length True \
     --bf16 False \
     --output_dir $CKPT_DIR \
-    --num_train_epochs 1 \
-    --per_device_train_batch_size 8 \
+    --num_train_epochs 2 \
+    --per_device_train_batch_size 4 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy "no" \
