@@ -102,6 +102,9 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 		mse_squared_error = (mse_squared_error*valid_mask).sum()
 
+		if num_valid > 0:
+			mse_squared_error = mse_squared_error/num_valid
+
 		# if num_valid > 0:
 		# 	mse_squared_error = (mse_squared_error*valid_mask).sum() / num_valid
 		# else:
