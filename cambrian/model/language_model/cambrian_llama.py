@@ -100,10 +100,12 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		valid_mask = valid_mask.view(-1)
 		num_valid = valid_mask.sum()
 
-		if num_valid > 0:
-			mse_squared_error = (mse_squared_error*valid_mask).sum() / num_valid
-		else:
-			mse_squared_error = 0
+		mse_squared_error = (mse_squared_error*valid_mask).sum()
+
+		# if num_valid > 0:
+		# 	mse_squared_error = (mse_squared_error*valid_mask).sum() / num_valid
+		# else:
+		# 	mse_squared_error = 0
 		return mse_squared_error
 
 	def forward(
