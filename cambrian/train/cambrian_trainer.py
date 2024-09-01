@@ -206,6 +206,7 @@ class CambrianTrainer(CustomTrainer):
     def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval):
         """ adapted from Trainer._maybe_log_save_evaluate to support logging extra losses
         """
+        print(111, self.control.should_log, flush=True)
         if self.control.should_log and self.state.global_step > self._globalstep_last_logged:
             if is_torch_tpu_available():
                 xm.mark_step()
@@ -236,6 +237,7 @@ class CambrianTrainer(CustomTrainer):
             self._total_loss_scalar += tr_loss_scalar
             self._globalstep_last_logged = self.state.global_step
             self.store_flos()
+            assert False, logs
             print(logs, flush=True)
             self.log(logs)
 
