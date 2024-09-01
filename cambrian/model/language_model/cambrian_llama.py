@@ -47,6 +47,17 @@ class CambrianConfig(LlamaConfig):
 
 	debug = "debug"
 
+from dataclasses import dataclass
+@dataclass
+class CausalLMOutputWithPastWithAuxLoss(CausalLMOutputWithPast):
+	loss: Optional[torch.FloatTensor] = None
+	logits: torch.FloatTensor = None
+	past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+	hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+	attentions: Optional[Tuple[torch.FloatTensor]] = None
+	lm_loss: Optional[torch.FloatTensor] = None
+	aux_loss: Optional[torch.FloatTensor] = None
+
 
 class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 	config_class = CambrianConfig
@@ -540,18 +551,20 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 
 		aux_loss_total = outputs[-1] * 0.1
 		total_loss = loss + aux_loss_total
-		assert not return_dict
 		if not return_dict:
 			output = (logits,) + outputs[1:]
 			return {'loss':total_loss, 'logits':logits, 'past_key_values':past_key_values, 'hidden_states':hidden_states, 'lm_loss':loss, 'aux_loss':aux_loss_total}
 			return (loss,) + output if loss is not None else output
 
-		return CausalLMOutputWithPast(
-			loss=loss,
+		return CausalLMOutputWithPastWithAuxLoss(
+			loss=total_loss,
 			logits=logits,
 			past_key_values=outputs.past_key_values,
 			hidden_states=outputs.hidden_states,
 			attentions=outputs.attentions,
+			lm_loss=loss,
+			aux_loss=aux_loss_total
+
 		)
 
 
