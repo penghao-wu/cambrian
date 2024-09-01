@@ -197,7 +197,7 @@ def map_params_to_module_names(model_list):
                 param_to_name[param] = f"{module_name}.{param_name}"
     return param_to_name
 
-
+import code
 class CambrianTrainer(CustomTrainer):
 
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -212,7 +212,7 @@ class CambrianTrainer(CustomTrainer):
                         if self.args.n_gpu > 1:
                             v = v.mean()
                         self.control.extra_losses[k] += v.detach() / self.args.gradient_accumulation_steps
-            print(self.control.extra_losses)
+            code.interact(local=locals())
             return (loss, outputs) if return_outputs else loss
         else:
             return super(CustomTrainer, self).compute_loss(model, inputs, return_outputs=return_outputs)
