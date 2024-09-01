@@ -198,15 +198,63 @@ def map_params_to_module_names(model_list):
     return param_to_name
 
 
-from torch.utils.data import Dataset, DataLoader
-from transformers.modeling_utils import unwrap_model
+"""Copyright: Nabarun Goswami (2023)."""
+from typing import Dict, List, Optional, Union
 
-class CambrianTrainer(CustomTrainer):
+import torch
+from transformers import Trainer, TrainerCallback, TrainingArguments, TrainerState, TrainerControl, \
+    is_torch_tpu_available
+from transformers.modeling_utils import unwrap_model
+from transformers.utils import logging
+
+
+logger = logging.get_logger(__name__)
+
+if is_torch_tpu_available(check_device=False):
+    import torch_xla.core.xla_model as xm
+    import torch_xla.debug.metrics as met
+
+
+class AddExtraLossesToTrainerState(TrainerCallback):
+    def __init__(self, extra_losses: List[str]):
+        self.extra_losses = extra_losses
+
+    def on_train_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
+        control.extra_losses = {k: torch.tensor(0.0).to(args.device) for k in self.extra_losses}
+        return control
+
+class CambrianTrainer(Trainer):
+
+    def __init__(self, extra_losses: List[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if extra_losses is not None:
+            self.add_callback(AddExtraLossesToTrainerState(extra_losses))
+
+        self.eval_dataloader = None
+
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        if hasattr(self.control, 'extra_losses') and model.training:
+            loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
+
+            if not isinstance(outputs, dict):
+                raise ValueError("The model output should be a dictionary or ModelOutput and not a tuple or list.")
+            for k, v in outputs.items():
+                if k in self.control.extra_losses:
+                    if v is not None:
+                        if self.args.n_gpu > 1:
+                            v = v.mean()
+                        self.control.extra_losses[k] += v.detach() / self.args.gradient_accumulation_steps
+
+            return (loss, outputs) if return_outputs else loss
+        else:
+            return super().compute_loss(model, inputs, return_outputs=return_outputs)
 
     def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval):
         """ adapted from Trainer._maybe_log_save_evaluate to support logging extra losses
         """
         print(111, self.control.should_log, flush=True)
+        assert False, self.control.extra_losses
         if self.control.should_log and self.state.global_step > self._globalstep_last_logged:
             if is_torch_tpu_available():
                 xm.mark_step()
