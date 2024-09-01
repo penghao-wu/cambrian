@@ -1103,6 +1103,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 	position_ids_vision_concise = []
 	attention_mask_c2f = []
 	attention_masks_all2all = []
+	image_valid_mask = []
 	vision_full_attention_mask = []
 	im_aux_attention_masks_list = [[] for _ in range(len(image_aux_token_len_list))]
 	base_image_token_len_per_side = int(image_token_len**0.5)
@@ -1166,11 +1167,13 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 					cur_attention_mask_im_replaced.append(cur_im_attention_mask)
 					cur_position_ids_im_replaced.append(cur_im_position_ids.to(torch.long))
 					index = cur_im_position_ids.max()+1
+					image_valid_mask.append(1)
 				else:
 					num_tokens_per_side = int(image_token_len**0.5)
 					image_token_len_with_newline = image_token_len + num_tokens_per_side
 					cur_attention_mask_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_attention_mask.device, dtype=cur_attention_mask.dtype))
 					cur_position_ids_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_input_ids.device, dtype=torch.long))
+					image_valid_mask.append(0)
 				cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
 				cur_im_position_ids_concise += index
 				# index = cur_im_position_ids_concise.max()+1
@@ -1268,8 +1271,9 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 	position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
 
 	vision_full_attention_mask = torch.stack(vision_full_attention_mask)
+	image_valid_mask = torch.tensor(image_valid_mask)
 
-	return new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask
+	return new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, image_valid_mask, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask
 
 
 @dataclass
@@ -1327,7 +1331,7 @@ class DataCollatorForSupervisedDataset(object):
 		image_sizes = [instance['image_size'] for instance in instances]
 		# new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
 
-		new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
+		new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, image_valid_mask, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
 
 		batch = dict(
 			input_ids=new_input_ids,
@@ -1335,6 +1339,7 @@ class DataCollatorForSupervisedDataset(object):
 			attention_masks=new_attention_masks,
 			attention_mask_c2f=attention_mask_c2f,
 			attention_masks_all2all=attention_masks_all2all,
+			image_valid_mask=image_valid_mask,
 			vision_full_attention_mask=vision_full_attention_mask,
 			position_ids_sys=position_ids_sys,
 			position_ids_vision_concise=position_ids_vision_concise,
@@ -1743,6 +1748,7 @@ def train(INDEX, attn_implementation=None):
 	trainer = CambrianTrainer(model=model,
 					tokenizer=tokenizer,
 					args=training_args,
+					extra_losses=["lm_loss", "aux_loss"]
 					**data_module)
 	trainer.is_fsdp_enabled = True
 	if training_args.train_continue:

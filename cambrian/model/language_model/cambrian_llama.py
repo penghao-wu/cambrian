@@ -54,12 +54,45 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 	def __init__(self, config: LlamaConfig):
 		super(CambrianLlamaModel, self).__init__(config)
 
+	def cal_aux_loss(self, layer_id, vision_full, vision_concise, vision_full_side_len, vision_concise_side_len, valid_mask):
+		bs = vision_full.shape[0]
+		vision_full_with_newline = vision_full
+		vision_full_with_newline = vision_full_with_newline.view(bs, vision_full_side_len, vision_full_side_len+1, -1)
+		vision_full = vision_full_with_newline[:, :, :-1, :]
+
+		vision_concise_with_newline = vision_concise
+		vision_concise_with_newline = vision_concise_with_newline.view(bs, vision_concise_side_len, vision_concise_side_len+1, -1)
+		vision_concise = vision_concise_with_newline[:, :, :-1, :]
+
+		vision_concise_up = F.interpolate(
+		vision_concise.permute(0, 3, 1, 2).contiguous().to(torch.float32),
+			size=(vision_full_side_len, vision_full_side_len),
+			mode='bilinear',
+			align_corners=False
+		).to(vision_concise.dtype)
+		vision_concise_up = vision_concise_up.permute(0, 2, 3, 1).contiguous()
+
+		vision_concise_up = self.vision_up_aux[layer_id](vision_concise_up)
+
+		mse_squared_error = (vision_concise_up - vision_full.detach()) ** 2
+		mse_squared_error = mse_squared_error.mean((1,2,3))
+
+		valid_mask = valid_mask.view(-1)
+		num_valid = valid_mask.sum()
+
+		if num_valid > 0:
+			mse_squared_error = (mse_squared_error*valid_mask).sum() / num_valid
+		else:
+			mse_squared_error = 0
+		return mse_squared_error
+
 	def forward(
 		self,
 		input_ids: torch.LongTensor = None,
 		attention_masks: Optional[torch.Tensor] = None,
 		attention_mask_c2f: Optional[torch.Tensor] = None,
 		attention_masks_all2all: Optional[torch.Tensor] = None,
+		image_valid_mask: Optional[torch.Tensor] = None,
 		vision_full_attention_mask: Optional[torch.Tensor] = None,
 		position_ids_sys: Optional[torch.LongTensor] = None,
 		position_ids_vision_concise: Optional[torch.LongTensor] = None,
@@ -129,7 +162,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		# skip_layers += [0, 1, 2, 3, 4, 5]
 
 		# skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-
+		aux_loss_total = 0
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states_text,)
@@ -237,6 +270,9 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 				hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(layer_outputs[0], [len_sys, len_vision_concise, len_vision_full, len_text], 1)
 
+				aux_loss_total += self.cal_aux_loss(i, hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side,
+						image_token_len_per_side_concise, image_valid_mask)
+
 							
 			else:
 				# if self.gradient_checkpointing and self.training:
@@ -327,6 +363,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 			
 
 		hidden_states_text = self.norm(hidden_states_text)
+		aux_loss_total = aux_loss_total/len(skip_layers)
 
 		# add hidden states from the last decoder layer
 		if output_hidden_states:
@@ -335,7 +372,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		next_cache = None
 
 		if not return_dict:
-			return tuple(v for v in [hidden_states_text, next_cache, all_hidden_states, all_self_attns] if v is not None)
+			return tuple(v for v in [hidden_states_text, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
 		return BaseModelOutputWithPast(
 			last_hidden_state=hidden_states_text,
 			past_key_values=next_cache,
@@ -367,6 +404,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 		attention_masks: Optional[torch.Tensor] = None,
 		attention_mask_c2f: Optional[torch.Tensor] = None,
 		attention_masks_all2all: Optional[torch.Tensor] = None,
+		image_valid_mask: Optional[torch.Tensor] = None,
 		vision_full_attention_mask:Optional[torch.Tensor] = None,
 		position_ids_sys: Optional[torch.LongTensor] = None,
 		position_ids_vision_concise: Optional[torch.LongTensor] = None,
@@ -424,6 +462,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			attention_masks=attention_masks,
 			attention_mask_c2f=attention_mask_c2f,
 			attention_masks_all2all=attention_masks_all2all,
+			image_valid_mask=image_valid_mask,
 			vision_full_attention_mask=vision_full_attention_mask,
 			position_ids_sys=position_ids_sys,
 			position_ids_vision_concise=position_ids_vision_concise,
@@ -499,8 +538,12 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			shift_labels = shift_labels.to(shift_logits.device)
 			loss = loss_fct(shift_logits, shift_labels)
 
+		aux_loss_total = outputs[-1] * 0.1
+		total_loss = loss + aux_loss_total
+
 		if not return_dict:
 			output = (logits,) + outputs[1:]
+			return {'loss':total_loss, 'logits':logits, 'past_key_values':past_key_values, 'hidden_states':hidden_states, 'lm_loss':loss, 'aux_loss':aux_loss_total}
 			return (loss,) + output if loss is not None else output
 
 		return CausalLMOutputWithPast(

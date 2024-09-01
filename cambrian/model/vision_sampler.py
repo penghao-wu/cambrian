@@ -554,12 +554,12 @@ class VisionMLP(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
 		self.sa = VisionMLP_sa(config, intermediate_size)
-		# self.ffn = nn.Sequential(
-		# 	nn.Linear(config.hidden_size, intermediate_size, bias=False),
-		# 	nn.SiLU(),
-		# 	nn.Linear(intermediate_size, config.hidden_size, bias=False)
-		# )
-		self.ffn = VisionMLP_ffn(config, intermediate_size)
+		self.ffn = nn.Sequential(
+			nn.Linear(config.hidden_size, intermediate_size, bias=False),
+			nn.SiLU(),
+			nn.Linear(intermediate_size, config.hidden_size, bias=False)
+		)
+		# self.ffn = VisionMLP_ffn(config, intermediate_size)
 
 # class VisionSA(nn.Module):
 # 	def __init__(self, config, intermediate_size=1024):
@@ -923,7 +923,7 @@ def decoder_forward(
 		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
 		q_states = self.mlp(q_states)
 		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
-		hidden_states_vision_full = self.vision_sampler_layers.ffn(hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+		hidden_states_vision_full = self.vision_sampler_layers.ffn(hidden_states_vision_full)
 		
 		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
 
