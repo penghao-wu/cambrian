@@ -540,7 +540,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 
 		aux_loss_total = outputs[-1] * 0.1
 		total_loss = loss + aux_loss_total
-
+		assert not return_dict
 		if not return_dict:
 			output = (logits,) + outputs[1:]
 			return {'loss':total_loss, 'logits':logits, 'past_key_values':past_key_values, 'hidden_states':hidden_states, 'lm_loss':loss, 'aux_loss':aux_loss_total}
