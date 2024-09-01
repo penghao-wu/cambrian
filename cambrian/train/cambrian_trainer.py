@@ -212,6 +212,7 @@ class CambrianTrainer(CustomTrainer):
                         if self.args.n_gpu > 1:
                             v = v.mean()
                         self.control.extra_losses[k] += v.detach() / self.args.gradient_accumulation_steps
+            print(self.control.extra_losses)
             return (loss, outputs) if return_outputs else loss
         else:
             return super(CustomTrainer, self).compute_loss(model, inputs, return_outputs=return_outputs)
