@@ -197,25 +197,23 @@ def map_params_to_module_names(model_list):
                 param_to_name[param] = f"{module_name}.{param_name}"
     return param_to_name
 
-import code
-class CambrianTrainer(CustomTrainer):
+class CambrianTrainer(Trainer):
 
-    def compute_loss(self, model, inputs, return_outputs=False):
-        if hasattr(self.control, 'extra_losses') and model.training:
-            loss, outputs = super(CustomTrainer, self).compute_loss(model, inputs, return_outputs=True)
+    # def compute_loss(self, model, inputs, return_outputs=False):
+    #     if hasattr(self.control, 'extra_losses') and model.training:
+    #         loss, outputs = super(CustomTrainer, self).compute_loss(model, inputs, return_outputs=True)
 
-            if not isinstance(outputs, dict):
-                raise ValueError("The model output should be a dictionary or ModelOutput and not a tuple or list.")
-            for k, v in outputs.items():
-                if k in self.control.extra_losses:
-                    if v is not None:
-                        if self.args.n_gpu > 1:
-                            v = v.mean()
-                        self.control.extra_losses[k] += v.detach() / self.args.gradient_accumulation_steps
-            code.interact(local=locals())
-            return (loss, outputs) if return_outputs else loss
-        else:
-            return super(CustomTrainer, self).compute_loss(model, inputs, return_outputs=return_outputs)
+    #         if not isinstance(outputs, dict):
+    #             raise ValueError("The model output should be a dictionary or ModelOutput and not a tuple or list.")
+    #         for k, v in outputs.items():
+    #             if k in self.control.extra_losses:
+    #                 if v is not None:
+    #                     if self.args.n_gpu > 1:
+    #                         v = v.mean()
+    #                     self.control.extra_losses[k] += v.detach() / self.args.gradient_accumulation_steps
+    #         return (loss, outputs) if return_outputs else loss
+    #     else:
+    #         return super(CustomTrainer, self).compute_loss(model, inputs, return_outputs=return_outputs)
 
     def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
         if self.train_dataset is None or not has_length(self.train_dataset):
