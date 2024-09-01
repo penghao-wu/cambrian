@@ -189,7 +189,7 @@ class CambrianMetaModel:
                     self.layers[i].vision_sampler_layers = VisionMLP(self.config)
 
                 self.vision_up_aux = nn.ModuleList(
-                    [nn.Linear(self.config.hidden_size, self.config.hidden_size, bias=False) in range(0, self.config.num_hidden_layers)]
+                    [nn.Linear(self.config.hidden_size, self.config.hidden_size, bias=False) for _ in range(0, self.config.num_hidden_layers)]
                     )
 
                 # self.mm_projector_aux_0 = nn.Linear(self.config.hidden_size, vision_hidden_size)
