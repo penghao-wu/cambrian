@@ -512,15 +512,54 @@ class VisionMLP_sa(nn.Module):
 
 		return input_embed
 	
+
+class VisionMLP_ffn(nn.Module):
+	def __init__(self, config, intermediate_size=1024):
+		super().__init__()
+		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		self.proj = nn.Sequential(
+			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
+			nn.SiLU(),
+			nn.Linear(intermediate_size, config.hidden_size, bias=False)
+		)
+
+	def forward(self, input_embed, context, side_len_input, side_len_context, attention_mask=None):
+		bs = input_embed.shape[0]
+		reduce_factor = side_len_input//side_len_context
+
+		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
+		context = context.view(bs, side_len_context, side_len_context+1, -1)
+
+		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
+
+		context_newline = context[:, :, -1:]
+		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
+
+		context = self.context_proj(context)
+		input_embed = self.input_proj(input_embed)
+		input_embed = torch.cat([input_embed, context], -1)
+		input_embed = self.proj(input_embed) 
+		
+		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
+
+		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
+
+		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
+
+		return input_embed
+	
 class VisionMLP(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
 		self.sa = VisionMLP_sa(config, intermediate_size)
-		self.ffn = nn.Sequential(
-			nn.Linear(config.hidden_size, intermediate_size, bias=False),
-			nn.SiLU(),
-			nn.Linear(intermediate_size, config.hidden_size, bias=False)
-		)
+		# self.ffn = nn.Sequential(
+		# 	nn.Linear(config.hidden_size, intermediate_size, bias=False),
+		# 	nn.SiLU(),
+		# 	nn.Linear(intermediate_size, config.hidden_size, bias=False)
+		# )
+		self.ffn = VisionMLP_ffn(config, intermediate_size)
 
 # class VisionSA(nn.Module):
 # 	def __init__(self, config, intermediate_size=1024):
@@ -883,8 +922,9 @@ def decoder_forward(
 
 		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
 		q_states = self.mlp(q_states)
-		hidden_states_vision_full = self.vision_sampler_layers.ffn(hidden_states_vision_full)
 		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
+		hidden_states_vision_full = self.vision_sampler_layers.ffn(hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+		
 		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
 
 		hidden_states = residual + hidden_states
