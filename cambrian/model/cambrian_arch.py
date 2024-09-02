@@ -88,8 +88,8 @@ class CambrianMetaModel:
                 # self.vision_sampler_layers = nn.ModuleList(
                 #     [VisionMLP(config) for layer_idx in range(0, config.num_hidden_layers)]
                 #     )
-                for i in range(config.num_hidden_layers):
-                    self.layers[i].vision_sampler_layers = VisionMLP(config)
+                # for i in range(config.num_hidden_layers):
+                #     self.layers[i].vision_sampler_layers = VisionMLP(config)
 
                 # self.vision_sampler = VisionTokenSampler(config.hidden_size, config.hidden_size, [config.hidden_size], [4], vision_hidden_size, 3)
 
