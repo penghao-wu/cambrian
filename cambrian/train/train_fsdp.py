@@ -1225,7 +1225,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] # concise to sys
 		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise # concise to concise
 		# cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = min_dtype # concise to concise
-		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position+image_token_len_concise_with_newline:image_position+image_token_len_concise_with_newline+image_token_len_with_newline] = cur_attention_mask_im_concise_full[:, :, image_token_len_concise_with_newline:].repeat(1, image_token_len_concise_with_newline, 1) # concise to full
+		# cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position+image_token_len_concise_with_newline:image_position+image_token_len_concise_with_newline+image_token_len_with_newline] = cur_attention_mask_im_concise_full[:, :, image_token_len_concise_with_newline:].repeat(1, image_token_len_concise_with_newline, 1) # concise to full
 
 		# text to all
 		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
@@ -1605,8 +1605,7 @@ def train(INDEX, attn_implementation=None):
 		)
 	else:
 		tokenizer = transformers.AutoTokenizer.from_pretrained(
-			# model_args.model_name_or_path,
-			"lmsys/vicuna-7b-v1.5",
+			model_args.model_name_or_path,
 			cache_dir=training_args.cache_dir,
 			model_max_length=training_args.model_max_length,
 			padding_side="right",
@@ -1682,8 +1681,7 @@ def train(INDEX, attn_implementation=None):
 			model.requires_grad_(False)
 			# for p in model.get_model().mm_projector.parameters():
 			#     p.requires_grad = True
-			# tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline']
-			tune_modules = ['vision_sampler', 'vision_sampler_layers', 'vision_query']
+			tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline']
 			for name, param in model.named_parameters():
 				if any(listed_name in name for listed_name in tune_modules):
 					print_rank0('tuning {}'.format(name))
