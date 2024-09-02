@@ -481,6 +481,7 @@ class CambrianMetaForCausalLM(ABC):
 
         if IS_XLA_AVAILABLE:
             image_features = image_features.view(bs, final_height, final_width, -1)
+            assert False, (image_features.shape, self.model.image_newline.shape)
             image_features = torch.cat((
                 image_features,
                 self.model.image_newline[None, None, None, :].expand(bs, final_height, 1, -1)
