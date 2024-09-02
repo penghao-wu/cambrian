@@ -167,7 +167,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		diag_masks = diag_masks.view(1, 1, image_token_len_newline, image_token_len_newline).repeat(bs, 1, 1, 1)
 		ee_attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, image_token_start_idx:image_token_start_idx+image_token_len_newline] = diag_masks
 
-		skip_layers = [_ for _ in range(12, 32)]
+		skip_layers = [_ for _ in range(0, 32)]
 
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
