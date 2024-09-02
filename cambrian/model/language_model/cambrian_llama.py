@@ -294,8 +294,10 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 				hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(layer_outputs[0], [len_sys, len_vision_concise, len_vision_full, len_text], 1)
 
-				aux_loss_total += 0 * self.cal_aux_loss(i, hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side,
-						image_token_len_per_side_concise, image_valid_mask)
+				aux_loss_total = 0
+
+				# aux_loss_total += 0 * self.cal_aux_loss(i, hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side,
+				# 		image_token_len_per_side_concise, image_valid_mask)
 
 							
 			else:
@@ -565,6 +567,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 
 		aux_loss_total = outputs.aux_loss * 0.1
 		total_loss = loss + aux_loss_total
+		total_loss = loss
 		if not return_dict:
 			output = (logits,) + outputs[1:]
 			return {'loss':total_loss, 'logits':logits, 'past_key_values':past_key_values, 'hidden_states':hidden_states, 'lm_loss':loss, 'aux_loss':aux_loss_total}
