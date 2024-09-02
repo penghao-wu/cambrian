@@ -84,7 +84,9 @@ class CambrianMetaModel:
                 self.image_newline = nn.Parameter(
                         torch.empty(config.hidden_size, dtype=self.dtype)
                     )
-                
+                self.vision_sampler_layers = nn.ModuleList(
+                    [VisionMLP(config) for layer_idx in range(0, self.config.num_hidden_layers)]
+                    )
                 # self.vision_sampler_layers = nn.ModuleList(
                 #     [VisionMLP(config) for layer_idx in range(0, config.num_hidden_layers)]
                 #     )
