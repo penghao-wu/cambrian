@@ -78,8 +78,8 @@ class CambrianMetaModel:
                         torch.empty(config.hidden_size, dtype=self.dtype)
                     )
             else:
-                self.vision_tower_aux_list = build_vision_tower_aux_list(config, delay_load=True)
-                config.mm_hidden_size = sum([vision_tower_aux.hidden_size for vision_tower_aux in self.vision_tower_aux_list]) 
+                # self.vision_tower_aux_list = build_vision_tower_aux_list(config, delay_load=True)
+                # config.mm_hidden_size = sum([vision_tower_aux.hidden_size for vision_tower_aux in self.vision_tower_aux_list]) 
                 self.mm_projector = build_vision_projector(config)
                 self.image_newline = nn.Parameter(
                         torch.empty(config.hidden_size, dtype=self.dtype)
@@ -481,7 +481,6 @@ class CambrianMetaForCausalLM(ABC):
 
         if IS_XLA_AVAILABLE:
             image_features = image_features.view(bs, final_height, final_width, -1)
-            assert False, (image_features.shape, self.model.image_newline.shape)
             image_features = torch.cat((
                 image_features,
                 self.model.image_newline[None, None, None, :].expand(bs, final_height, 1, -1)
