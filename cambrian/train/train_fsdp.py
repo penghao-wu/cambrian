@@ -1094,7 +1094,7 @@ def combine_causal_attention_mask(seq_len, attention_mask, dtype=torch.bfloat16)
 	return causal_mask
 	
 
-def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len=576, image_token_len_concise=36, image_aux_token_len_list=[192*192], max_length=2048):
+def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len=576, image_token_len_concise=36, image_aux_token_len_list=[192*192], max_length=2048, step=0):
 	input_ids_im_replaced = []
 	labels_im_replaced = []
 	attention_mask_im_replaced = []
@@ -1230,11 +1230,17 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 		# text to all
 		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
 		
-		if random.random()>0.5:
+		if step < 1000:
+			concise_p = 0.5
+		elif step < 1800:
+			concise_p = 0.3
+		else:
+			concise_p = -1
+
+		if random.random() < concise_p:
 			# see concise only
 			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
 			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline+image_token_len_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position+image_token_len_with_newline:] # text to text
-
 		else:
 			# see full only
 			# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
@@ -1290,7 +1296,6 @@ class DataCollatorForSupervisedDataset(object):
 
 	def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
 		self.step +=1
-		print(self.step, flush=True)
 		image_token_len = self.image_token_len
 		image_token_len_concise = self.image_token_len_concise
 		image_aux_token_len_list = self.image_aux_token_len_list
@@ -1334,7 +1339,7 @@ class DataCollatorForSupervisedDataset(object):
 		image_sizes = [instance['image_size'] for instance in instances]
 		# new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
 
-		new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, image_valid_mask, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length)
+		new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, image_valid_mask, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length, self.step)
 
 		batch = dict(
 			input_ids=new_input_ids,
