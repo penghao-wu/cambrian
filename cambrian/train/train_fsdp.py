@@ -1230,15 +1230,15 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 		# text to all
 		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
 		
-		# if random.random()>0.5:
-		# 	# see concise only
-		# 	cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
-		# 	cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline+image_token_len_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position+image_token_len_with_newline:] # text to text
+		if random.random()>0.5:
+			# see concise only
+			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
+			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline+image_token_len_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position+image_token_len_with_newline:] # text to text
 
-		# else:
-		# see full only
-		# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
-		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
+		else:
+			# see full only
+			# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
+			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
 			
 		# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
 		# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
@@ -1286,9 +1286,11 @@ class DataCollatorForSupervisedDataset(object):
 	image_token_len_concise: int
 	image_aux_token_len_list: list
 	image_position: int
+	step: int
 
 	def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
-
+		self.step +=1
+		print(self.step, flush=True)
 		image_token_len = self.image_token_len
 		image_token_len_concise = self.image_token_len_concise
 		image_aux_token_len_list = self.image_aux_token_len_list
@@ -1382,6 +1384,8 @@ def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
 
 	if hasattr(data_args, 'image_position'):
 		data_collator_kwargs['image_position'] = data_args.image_position
+
+	data_collator_kwargs['step'] = 0
 
 	data_collator = DataCollatorForSupervisedDataset(**data_collator_kwargs)
 
