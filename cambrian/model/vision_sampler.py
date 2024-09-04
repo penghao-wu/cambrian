@@ -553,8 +553,8 @@ class VisionMLP_ffn(nn.Module):
 class VisionMLP(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
-		# self.sa = VisionMLP_sa(config, intermediate_size)
-		self.sa = VisionSA(config, intermediate_size)
+		self.sa = VisionMLP_sa(config, intermediate_size)
+		# self.sa = VisionSA(config, intermediate_size)
 		self.ffn = nn.Sequential(
 			nn.Linear(config.hidden_size, intermediate_size, bias=False),
 			nn.SiLU(),
@@ -710,7 +710,7 @@ class VisionSA(nn.Module):
 		# sa_kv = torch.cat([input_embed, context], dim=1)
 		sa_kv = input_embed
 		input_embed = self.self_attention(sa_kv, input_embed, attention_masks)
-		gate_weight = self.gate(input_embed)
+		gate_weight = self.gate(input_embed+context)
 		input_embed = gate_weight*input_embed + (1-gate_weight)*context
 
 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
