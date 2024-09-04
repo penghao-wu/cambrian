@@ -710,7 +710,7 @@ class VisionSA(nn.Module):
 		# sa_kv = torch.cat([input_embed, context], dim=1)
 		sa_kv = input_embed
 		input_embed = self.self_attention(sa_kv, input_embed, attention_masks)
-		gate_weight = self.gate(input_embed+context)
+		gate_weight = self.gate(input_embed)
 		input_embed = gate_weight*input_embed + (1-gate_weight)*context
 
 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
