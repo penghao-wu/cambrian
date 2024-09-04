@@ -705,7 +705,7 @@ class VisionSA(nn.Module):
 		if attention_masks is not None:
 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
-		# attention_masks = attention_masks[:, :, :, :-1]
+		attention_masks = attention_masks[:, :, :, :-1]
 
 		# sa_kv = torch.cat([input_embed, context], dim=1)
 		sa_kv = input_embed
