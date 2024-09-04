@@ -1229,7 +1229,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
 		# text to all
 		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
-		
+		print(step, flush=True)
 		if step < 1000:
 			concise_p = 0.5
 		elif step < 1800:
