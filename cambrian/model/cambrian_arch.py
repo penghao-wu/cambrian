@@ -226,8 +226,8 @@ class CambrianMetaModel:
                 self.vision_query.data = mm_projector_weights['model.vision_query']
             self.image_newline.data = mm_projector_weights['model.image_newline']
 
-            # for i in range(self.config.num_hidden_layers):
-            #     self.layers[i].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
+            for i in range(self.config.num_hidden_layers):
+                self.layers[i].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
             # self.vision_query.data = mm_projector_weights['model.vision_query']
             # self.mm_projector_aux_0.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_0'),strict=True)
             # self.mm_projector_aux_1.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_1'),strict=True)
