@@ -197,7 +197,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
-						decoder_layer.forward_vision,
+						decoder_layer.__call__,
 						hidden_states_sys,
 						hidden_states_vision_concise,
 						hidden_states_vision_full,
@@ -212,7 +212,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 						use_cache,
 					)
 				else:
-					layer_outputs = decoder_layer.forward_vision(
+					layer_outputs = decoder_layer(
 						hidden_states_sys,
 						hidden_states_vision_concise,
 						hidden_states_vision_full,

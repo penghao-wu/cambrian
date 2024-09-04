@@ -939,5 +939,5 @@ def decoder_forward_vision(
 
 		return outputs
 
-LlamaDecoderLayer.forward = decoder_forward
-LlamaDecoderLayer.forward_vision = decoder_forward_vision
+LlamaDecoderLayer.forward = decoder_forward_vision
+# LlamaDecoderLayer.forward_vision = decoder_forward_vision
