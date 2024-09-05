@@ -553,8 +553,8 @@ class VisionMLP_ffn(nn.Module):
 class VisionMLP(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
-		# self.sa = VisionMLP_sa(config, intermediate_size)
-		self.sa = VisionSA(config, intermediate_size)
+		self.sa = VisionMLP_sa(config, intermediate_size)
+		# self.sa = VisionSA(config, intermediate_size)
 		self.ffn = nn.Sequential(
 			nn.Linear(config.hidden_size, intermediate_size, bias=False),
 			nn.SiLU(),

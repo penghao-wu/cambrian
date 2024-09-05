@@ -3,11 +3,11 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_skipall_mlp_conciseseeall_p5_576_36_finetune_737k_ep2" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_skipall_saffn_finetune_737k" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
-export RESUME_CKPT_DIR="/home/cirrascale/checkpoints/$CKPT_NAME/checkpoint-2000" &&
+export RESUME_CKPT_DIR="/home/cirrascale/checkpoints/$CKPT_NAME/checkpoint-500" &&
 
 python cambrian/train/train_tpu.py \
     --model_name_or_path lmsys/vicuna-7b-v1.5 \
@@ -36,7 +36,7 @@ python cambrian/train/train_tpu.py \
     --group_by_modality_length True \
     --bf16 False \
     --output_dir $CKPT_DIR \
-    --num_train_epochs 2 \
+    --num_train_epochs 1 \
     --per_device_train_batch_size 4 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 1 \
