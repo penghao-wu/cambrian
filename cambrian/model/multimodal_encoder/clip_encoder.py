@@ -100,8 +100,19 @@ class ClipVisionTower(BaseVisionTower):
             from torch_xla.utils.checkpoint import checkpoint
             self.vision_tower.vision_model.encoder._gradient_checkpointing_func = checkpoint
 
+        # with torch.set_grad_enabled(self.unfreeze_mm_vision_tower):
+        #     image_forward_outs = self.vision_tower(images.to(device=self.device, dtype=self.dtype), output_hidden_states=True)
+        #     image_features = self.feature_select(image_forward_outs).to(images.dtype)
+        #     interp_features = self.interpolate(image_features)
+        #     return interp_features
         with torch.set_grad_enabled(self.unfreeze_mm_vision_tower):
+            B, _, H_img, W_img = images.shape
+            factor = H_img // 336
+            images = images.view(B, 3, factor, 336, factor, 336).permute(0, 2, 4, 1, 3, 5).contiguous().flatten(0, 2)
             image_forward_outs = self.vision_tower(images.to(device=self.device, dtype=self.dtype), output_hidden_states=True)
             image_features = self.feature_select(image_forward_outs).to(images.dtype)
+            b, num_tokens, dim = image_features.shape
+            H_f = W_f = int(num_tokens**0.5)
+            image_features = image_features.view(b, factor, factor, H_f, W_f, dim).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
             interp_features = self.interpolate(image_features)
             return interp_features
