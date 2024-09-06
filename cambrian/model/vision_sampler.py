@@ -612,77 +612,23 @@ class VisionMLP(nn.Module):
 # 		return input_embed
 	
 
-# class VisionSA(nn.Module):
-# 	def __init__(self, config, intermediate_size=1024):
-# 		super().__init__()
-# 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-# 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-# 		# self.cat_proj = nn.Linear(intermediate_size*2, intermediate_size, bias=False)
-# 		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16, config.hidden_size)
-# 		self.layernorm_pre = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-# 		# self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-
-# 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
-# 		bs = input_embed.shape[0]
-# 		reduce_factor = side_len_input//side_len_context
-		
-# 		input_embed = self.layernorm_pre(input_embed)
-
-# 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
-# 		context = context.view(bs, side_len_context, side_len_context+1, -1)
-
-# 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
-		
-# 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 2).flatten(1, 2)
-# 		residual = input_embed
-
-# 		context_newline = context[:, :, -1:]
-# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
-# 		# context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 2).flatten(1, 2)
-
-# 		context = self.context_proj(context)
-# 		input_embed = self.input_proj(input_embed)
-
-# 		# input_embed = torch.cat([context, input_embed], -1)
-# 		# input_embed = self.cat_proj(input_embed)
-		
-# 		if attention_masks is not None:
-# 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
-# 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
-# 		# attention_masks = attention_masks[:, :, :, :-1]
-
-# 		sa_kv = torch.cat([input_embed, context], dim=1)
-# 		# sa_kv = input_embed
-# 		input_embed = self.self_attention(sa_kv, input_embed, attention_masks) + residual
-		
-
-# 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
-
-# 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
-
-# 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
-
-# 		return input_embed
-
-
-
-
 class VisionSA(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
 		# self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		# self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		self.context_proj = nn.Identity()
+		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		# self.cat_proj = nn.Linear(intermediate_size*2, intermediate_size, bias=False)
-		self.self_attention = CrossAttention(config.hidden_size, config.hidden_size, intermediate_size, 16, config.hidden_size)
 		self.gate = nn.Sequential(nn.Linear(config.hidden_size, config.hidden_size, bias=False), nn.Sigmoid())
-		# self.layernorm_pre = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16, config.hidden_size)
+		self.layernorm_pre = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 		# self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
 		bs = input_embed.shape[0]
 		reduce_factor = side_len_input//side_len_context
 		
-		input_embed = input_embed
+		input_embed = self.layernorm_pre(input_embed)
 
 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
 		context = context.view(bs, side_len_context, side_len_context+1, -1)
@@ -693,11 +639,11 @@ class VisionSA(nn.Module):
 		residual = input_embed
 
 		context_newline = context[:, :, -1:]
-		# context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
-		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 2).flatten(1, 2)
+		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
+		# context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 2).flatten(1, 2)
 
-		# context = self.context_proj(context)
-		# input_embed = self.input_proj(input_embed)
+		context = self.context_proj(context)
+		input_embed = self.input_proj(input_embed)
 
 		# input_embed = torch.cat([context, input_embed], -1)
 		# input_embed = self.cat_proj(input_embed)
@@ -705,13 +651,15 @@ class VisionSA(nn.Module):
 		if attention_masks is not None:
 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
-		attention_masks = attention_masks[:, :, :, :-1]
+		# attention_masks = attention_masks[:, :, :, :-1]
 
 		# sa_kv = torch.cat([input_embed, context], dim=1)
 		sa_kv = input_embed
+		# input_embed = self.self_attention(sa_kv, input_embed, attention_masks) + residual
 		input_embed = self.self_attention(sa_kv, input_embed, attention_masks)
 		gate_weight = self.gate(input_embed+context)
 		input_embed = gate_weight*input_embed + (1-gate_weight)*context
+		input_embed = input_embed + residual
 
 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
@@ -720,6 +668,63 @@ class VisionSA(nn.Module):
 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
 
 		return input_embed
+
+
+
+
+# class VisionSA(nn.Module):
+# 	def __init__(self, config, intermediate_size=1024):
+# 		super().__init__()
+# 		# self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		# self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		# self.cat_proj = nn.Linear(intermediate_size*2, intermediate_size, bias=False)
+# 		self.self_attention = CrossAttention(config.hidden_size, config.hidden_size, intermediate_size, 16, config.hidden_size)
+# 		self.gate = nn.Sequential(nn.Linear(config.hidden_size, config.hidden_size, bias=False), nn.Sigmoid())
+# 		# self.layernorm_pre = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+# 		# self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+
+# 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
+# 		bs = input_embed.shape[0]
+# 		reduce_factor = side_len_input//side_len_context
+		
+# 		input_embed = input_embed
+
+# 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
+# 		context = context.view(bs, side_len_context, side_len_context+1, -1)
+
+# 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+		
+# 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 2).flatten(1, 2)
+# 		residual = input_embed
+
+# 		context_newline = context[:, :, -1:]
+# 		# context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
+# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 2).flatten(1, 2)
+
+# 		# context = self.context_proj(context)
+# 		# input_embed = self.input_proj(input_embed)
+
+# 		# input_embed = torch.cat([context, input_embed], -1)
+# 		# input_embed = self.cat_proj(input_embed)
+		
+# 		if attention_masks is not None:
+# 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
+# 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
+# 		attention_masks = attention_masks[:, :, :, :-1]
+
+# 		# sa_kv = torch.cat([input_embed, context], dim=1)
+# 		sa_kv = input_embed
+# 		input_embed = self.self_attention(sa_kv, input_embed, attention_masks)
+# 		gate_weight = self.gate(input_embed+context)
+# 		input_embed = gate_weight*input_embed + (1-gate_weight)*context
+
+# 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
+
+# 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
+
+# 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
+
+# 		return input_embed
 
 class CrossNorm(nn.Module):
     def __init__(self, C, epsilon=1e-5, affine=False):
