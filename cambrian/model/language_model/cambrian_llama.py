@@ -158,16 +158,17 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		vision_tokens = hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :].clone()
 
 		ee_attention_mask = attention_mask.clone()
-		bs = ee_attention_mask.shape[0]
-		min_dtype = torch.finfo(inputs_embeds.dtype).min
-		ee_attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, :] = min_dtype
-		diag_masks = torch.full((image_token_len_newline, image_token_len_newline), min_dtype, dtype=ee_attention_mask.dtype, device=ee_attention_mask.device)
-		for j in range(image_token_len_newline):
-			diag_masks[j, j] = 0
-		diag_masks = diag_masks.view(1, 1, image_token_len_newline, image_token_len_newline).repeat(bs, 1, 1, 1)
-		ee_attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, image_token_start_idx:image_token_start_idx+image_token_len_newline] = diag_masks
+		# bs = ee_attention_mask.shape[0]
+		# min_dtype = torch.finfo(inputs_embeds.dtype).min
+		# ee_attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, :] = min_dtype
+		# diag_masks = torch.full((image_token_len_newline, image_token_len_newline), min_dtype, dtype=ee_attention_mask.dtype, device=ee_attention_mask.device)
+		# for j in range(image_token_len_newline):
+		# 	diag_masks[j, j] = 0
+		# diag_masks = diag_masks.view(1, 1, image_token_len_newline, image_token_len_newline).repeat(bs, 1, 1, 1)
+		# ee_attention_mask[:, :, image_token_start_idx:image_token_start_idx+image_token_len_newline, image_token_start_idx:image_token_start_idx+image_token_len_newline] = diag_masks
 
-		skip_layers = [_ for _ in range(0, 32)]
+		# skip_layers = [_ for _ in range(0, 32)]
+		skip_layers = []
 
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
