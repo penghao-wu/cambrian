@@ -101,7 +101,7 @@ class ClipVisionTower(BaseVisionTower):
             self.vision_tower.vision_model.encoder._gradient_checkpointing_func = checkpoint
 
         with torch.set_grad_enabled(self.unfreeze_mm_vision_tower):
-            B, _, H_img, W_img = images.shape[0]
+            B, _, H_img, W_img = images.shape
             factor = H_img // 336
             images = images.view(B, 3, factor, 336, factor, 336).permute(0, 2, 4, 1, 3, 5).continous().flatten(0, 2)
             image_forward_outs = self.vision_tower(images.to(device=self.device, dtype=self.dtype), output_hidden_states=True)
