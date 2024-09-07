@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_skipall_saffn_SAgate_noproj_finetune_737k" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_skip11_31_4crops_finetune_737k" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -12,13 +12,13 @@ python cambrian/train/train_tpu.py \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./cambrian_7b_CLIP_mlp_2scale_skipall_saffn_SAgate_noproj_576_36_shareGPT4V_pretrain_lr5e5/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./cambrian_7b_CLIP_mlp_2scale_skip11_31_4crops_shareGPT4V_pretrain_lr1e4/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
-    --vision_tower_aux_token_len_list '[576]' \
-    --image_token_len 576 \
+    --vision_tower_aux_token_len_list '[2304]' \
+    --image_token_len 2304 \
     --image_token_len_concise 36 \
     --num_query_group 1 \
-    --query_num_list '[576]' \
+    --query_num_list '[2304]' \
     --connector_depth 3 \
     --image_position 35 \
     --vision_hidden_size 1024 \
@@ -49,7 +49,7 @@ python cambrian/train/train_tpu.py \
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
     --tf32 False \
-    --model_max_length 2048 \
+    --model_max_length 3840 \
     --gradient_checkpointing True \
     --dataloader_num_workers 4 \
     --lazy_preprocess True \
