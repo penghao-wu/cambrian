@@ -182,7 +182,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		# skip_layers = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
 		# skip_layers = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
 		# skip_layers = [_ for _ in range(0, 32)]
-		skip_layers = [_ for _ in range(11, 32)]
+		# skip_layers = [_ for _ in range(11, 32)]
 		# skip_layers += [0, 1, 2, 3, 4, 5]
 
 		# skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
