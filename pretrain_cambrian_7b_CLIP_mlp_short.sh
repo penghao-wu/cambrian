@@ -3,20 +3,20 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_144_shareGPT4V_pretrain" &&
+export CKPT_NAME="cambrian_13b_CLIP_mlp_576_shareGPT4V_pretrain" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path lmsys/vicuna-7b-v1.5 \
+    --model_name_or_path /mnt/disks/storage/llm_ckpts/vicuna1.5 \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
-    --vision_tower_aux_token_len_list '[144]' \
-    --image_token_len 144 \
+    --vision_tower_aux_token_len_list '[576]' \
+    --image_token_len 576 \
     --num_query_group 1 \
-    --query_num_list '[144]' \
+    --query_num_list '[576]' \
     --connector_depth 3 \
     --image_position 35 \
     --vision_hidden_size 1024 \
