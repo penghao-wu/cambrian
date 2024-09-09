@@ -11,7 +11,7 @@ export RESUME_CKPT_DIR="/home/cirrascale/checkpoints/$CKPT_NAME/checkpoint-1000"
 
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path /mnt/disks/storage/llm_ckpts/vicuna1.5 \
+    --model_name_or_path lmsys/vicuna-7b-v1.5 \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
