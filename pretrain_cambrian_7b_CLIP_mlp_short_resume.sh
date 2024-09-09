@@ -3,15 +3,15 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_576_imgee_skipall_shareGPT4V_pretrain" &&
+export CKPT_NAME="cambrian_13b_CLIP_mlp_576_shareGPT4V_pretrain" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
-export RESUME_CKPT_DIR="/home/cirrascale/checkpoints/$CKPT_NAME/checkpoint-2000" &&
+export RESUME_CKPT_DIR="/home/cirrascale/checkpoints/$CKPT_NAME/checkpoint-1000" &&
 
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path lmsys/vicuna-7b-v1.5 \
+    --model_name_or_path /mnt/disks/storage/llm_ckpts/vicuna1.5 \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
