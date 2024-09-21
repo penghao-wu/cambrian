@@ -14,7 +14,7 @@ python cambrian/train/train_tpu.py \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
-    --image_token_len 9 \
+    --image_token_len 576 \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \
