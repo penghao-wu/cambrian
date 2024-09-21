@@ -377,6 +377,8 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 				)
 
 		hidden_states = outputs[0]
+		if labels is not None:
+			labels = labels[:, -hidden_states.shape[1]:]
 		logits = self.lm_head(hidden_states)
 		logits = logits.float()
 
