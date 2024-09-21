@@ -1754,6 +1754,9 @@ def train(INDEX, attn_implementation=None):
     elif model_args.version == "llama_v3":
         tokenizer.pad_token = "<|reserved_special_token_0|>"
         tokenizer.pad_token_id = 128002
+    elif "qwen" in model_args.version:
+        tokenizer.pad_token_id = "<|endoftext|>"
+        tokenizer.pad_token_id = 151643
     else:
         tokenizer.pad_token = tokenizer.unk_token
         if model_args.version in conversation_lib.conv_templates:
