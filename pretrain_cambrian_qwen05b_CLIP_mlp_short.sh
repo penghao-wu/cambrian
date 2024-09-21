@@ -18,7 +18,7 @@ python cambrian/train/train_tpu.py \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \
-    --image_position 35 \
+    --image_position 14 \
     --vision_hidden_size 1024 \
     --connector_only True \
     --num_of_vision_sampler_layers 10 \
