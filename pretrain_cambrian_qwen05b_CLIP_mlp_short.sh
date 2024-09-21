@@ -3,13 +3,13 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_skip14_40_shareGPT4V_pretrain_lr1e4" &&
+export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_2scale_skip8_24_shareGPT4V_pretrain_lr1e4" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path /mnt/disks/storage/llm_ckpts/vicuna1.5 \
-    --version v1 \
+    --model_name_or_path "Qwen/Qwen2-0.5B-Instruct" \
+    --version qwen_1_5 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
@@ -19,7 +19,7 @@ python cambrian/train/train_tpu.py \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \
-    --image_position 35 \
+    --image_position 14 \
     --vision_hidden_size 1024 \
     --connector_only True \
     --num_of_vision_sampler_layers 10 \
@@ -40,7 +40,7 @@ python cambrian/train/train_tpu.py \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
-    --save_steps 1000 \
+    --save_steps 100000 \
     --save_total_limit 1 \
     --learning_rate 1e-3 \
     --weight_decay 0. \
@@ -58,12 +58,12 @@ python cambrian/train/train_tpu.py \
     --fsdp_config fsdp_config.json
 
 
-CKPT_PATH=checkpoints/$CKPT_NAME
-# check if the checkpoint path exists
-if [ ! -d "$CKPT_PATH" ]; then
-    echo "Checkpoint path does not exist. Exiting..."
-    exit 1
-fi
-echo "Training finished. Syncing checkpoints to GCS..."
-gcloud alpha storage rsync $CKPT_PATH gs://cambrian-archive/checkpoints/$CKPT_NAME
-echo "Syncing finished. Checkpoints are now available at gs://cambrian-archive/checkpoints/$CKPT_NAME"
+# CKPT_PATH=checkpoints/$CKPT_NAME
+# # check if the checkpoint path exists
+# if [ ! -d "$CKPT_PATH" ]; then
+#     echo "Checkpoint path does not exist. Exiting..."
+#     exit 1
+# fi
+# echo "Training finished. Syncing checkpoints to GCS..."
+# gcloud alpha storage rsync $CKPT_PATH gs://cambrian-archive/checkpoints/$CKPT_NAME
+# echo "Syncing finished. Checkpoints are now available at gs://cambrian-archive/checkpoints/$CKPT_NAME"

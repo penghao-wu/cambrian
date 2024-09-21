@@ -12,6 +12,7 @@ class SeparatorStyle(Enum):
     TWO = auto()
     MPT = auto()
     PLAIN = auto()
+    CHATML = auto()
     LLAMA_2 = auto()
     LLAMA_3 = auto()
     MISTRAL = auto()
@@ -97,6 +98,17 @@ class Conversation:
                 else:
                     ret += ""
             ret = ret.lstrip(self.sep)
+        elif self.sep_style == SeparatorStyle.CHATML:
+            ret = "" if self.system == "" else self.system + self.sep + "\n"
+            for role, message in messages:
+                if message:
+                    if type(message) is tuple:
+                        message, images, _ = message
+                        message = "<image>" * len(images) + message
+                    ret += role + "\n" + message + self.sep + "\n"
+                else:
+                    ret += role + "\n"
+            return ret
         elif self.sep_style == SeparatorStyle.LLAMA_3:
             wrap_sys = lambda msg: f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>{msg}<|eot_id|>" if len(msg) > 0 else msg
             wrap_inst_user = lambda msg: f"<|start_header_id|>user<|end_header_id|>{msg}<|eot_id|>"
@@ -379,6 +391,17 @@ A conversation between a user and an LLM-based AI assistant. The assistant gives
     sep="<|im_end|>",
 )
 
+conv_qwen = Conversation(
+    system="""<|im_start|>system
+You are a helpful assistant.""",
+    roles=("<|im_start|>user", "<|im_start|>assistant"),
+    version="qwen",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.CHATML,
+    sep="<|im_end|>",
+)
+
 conv_gemma = Conversation(
     system="""""",
     roles=("<start_of_turn>user\n", "<start_of_turn>model\n"),
@@ -560,7 +583,9 @@ conv_phi3 = Conversation(
 )
 
 # default_conversation = conv_chatml_direct
-default_conversation = conv_vicuna_v1
+# default_conversation = conv_vicuna_v1
+default_conversation = conv_qwen
+# default_conversation = conv_cambrian_plain
 
 # default_conversation = conv_llama_3
 
@@ -593,6 +618,9 @@ conv_templates = {
     "mpt": conv_mpt,
     "conv_gemma": conv_gemma,
     "phi3": conv_phi3,
+
+    "qwen_1_5": conv_qwen,
+    "qwen_2": conv_qwen,
 }
 
 
