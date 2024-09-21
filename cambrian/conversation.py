@@ -561,7 +561,7 @@ conv_phi3 = Conversation(
 
 # default_conversation = conv_chatml_direct
 # default_conversation = conv_vicuna_v1
-default_conversation = plain
+default_conversation = conv_cambrian_plain
 
 # default_conversation = conv_llama_3
 
