@@ -45,7 +45,7 @@ from cambrian import conversation as conversation_lib
 from cambrian.utils import IS_XLA_AVAILABLE
 from cambrian.mm_utils import tokenizer_image_token, tokenizer_image_token_llama3
 from cambrian.train.wandb_nan_alert_callback import NanInfAlertWandbCallback
-from cambrian.model import CambrianLlamaForCausalLM, CambrianMistralForCausalLM
+from cambrian.model import CambrianLlamaForCausalLM, CambrianMistralForCausalLM, CambrianQwenForCausalLM
 from cambrian.model.language_model.cambrian_phi3 import CambrianPhi3ForCausalLM
 from PIL import Image
 
@@ -388,6 +388,81 @@ def preprocess_multimodal(
             sentence["value"] = sentence["value"].replace(DEFAULT_IMAGE_TOKEN, replace_token)
 
     return sources
+
+def preprocess_qwen(sources, tokenizer: transformers.PreTrainedTokenizer, has_image: bool = False, max_len=2048, system_message: str = "You are a helpful assistant.") -> Dict:
+    # roles = {"human": "<|im_start|>user", "gpt": "<|im_start|>assistant"}
+    roles = {"human": "user", "gpt": "assistant"}
+
+    # Add image tokens to tokenizer as a special tokens
+    # Use a deepcopy of tokenizer so that we don't modify on the tokenizer
+    tokenizer = copy.deepcopy(tokenizer)
+    # When there is actually an image, we add the image tokens as a special token
+    if has_image:
+        tokenizer.add_tokens(["<image>"], special_tokens=True)
+
+    image_token_index = tokenizer.convert_tokens_to_ids("<image>")
+    im_start, im_end = tokenizer.additional_special_tokens_ids
+    # unmask_tokens = ["<|im_start|>", "<|im_start|>", "\n"]
+    unmask_tokens_idx =  [198, im_start, im_end]
+    nl_tokens = tokenizer("\n").input_ids
+
+    # Reset Qwen chat templates so that it won't include system message every time we apply
+    chat_template = "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+    tokenizer.chat_template = chat_template
+
+    # _system = tokenizer("system").input_ids + nl_tokens
+    # _user = tokenizer("user").input_ids + nl_tokens
+    # _assistant = tokenizer("assistant").input_ids + nl_tokens
+
+    # Apply prompt templates
+    input_ids, targets = [], []
+    for i, source in enumerate(sources):
+        if roles[source[0]["from"]] != roles["human"]:
+            source = source[1:]
+
+        input_id, target = [], []
+
+        # New version, use apply chat template
+        # Build system message for each sentence
+        input_id += tokenizer.apply_chat_template([{"role" : "system", "content" : system_message}])
+        target += [IGNORE_INDEX] * len(input_id)
+
+        for conv in source:
+            # Make sure llava data can load
+            try:
+                role = conv["role"]
+                content = conv["content"]
+            except:
+                role = conv["from"]
+                content = conv["value"]
+
+            role =  roles.get(role, role)
+            
+            conv = [{"role" : role, "content" : content}]
+            encode_id = tokenizer.apply_chat_template(conv)
+            input_id += encode_id
+            if role in ["user", "system"]:
+                target += [IGNORE_INDEX] * len(encode_id)
+            else:
+                target += encode_id
+        
+
+                    
+        assert len(input_id) == len(target), f"{len(input_id)} != {len(target)}"
+        for idx, encode_id in enumerate(input_id):
+            if encode_id in unmask_tokens_idx:
+                target[idx] = encode_id
+            if encode_id == image_token_index:
+                input_id[idx] = IMAGE_TOKEN_INDEX
+        input_ids.append(input_id)
+        targets.append(target)
+    input_ids = torch.tensor(input_ids, dtype=torch.long)
+    targets = torch.tensor(targets, dtype=torch.long)
+
+    return dict(
+        input_ids=input_ids,  # tensor(bs x seq_len)
+        labels=targets,  # tensor(bs x seq_len)
+    )
 
 def preprocess_llama_3(
     sources,
@@ -876,6 +951,8 @@ def preprocess(
         return preprocess_v1(sources, tokenizer, has_image=has_image)
     if conversation_lib.default_conversation.version == "mpt":
         return preprocess_mpt(sources, tokenizer, has_image=has_image)
+    if conversation_lib.default_conversation.version == "qwen":
+        return preprocess_qwen(sources, tokenizer, has_image=has_image)
     if conversation_lib.default_conversation.version == "phi3":
         return preprocess_phi3(sources, tokenizer, has_image=has_image)
     
@@ -1110,7 +1187,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
         image_size = image_sizes[batch_idx]
         
         image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
-
+        assert False, image_token_indices
         cur_input_ids_im_replaced = []
         cur_labels_im_replaced = []
         cur_attention_mask_im_replaced = []
@@ -1548,6 +1625,25 @@ def train(INDEX, attn_implementation=None):
                 **bnb_model_from_pretrained_args
             )
             transformers.models.mistral.modeling_mistral.MistralRMSNorm.forward = forward
+        elif "qwen" in model_name.lower():
+            logger.warning(f"Vision tower, loading CambrianQwenForCausalLM: {model_args.model_name_or_path}")
+
+            # replace training_args.fsdp_config.transformer_layer_cls_to_wrap with Qwen2lDecoderLayer
+            if (
+                hasattr(training_args, 'fsdp_config') and
+                'transformer_layer_cls_to_wrap' in training_args.fsdp_config.keys()
+            ):
+                logger.warning(f"Replacing training_args.fsdp_config.transformer_layer_cls_to_wrap with Qwen2DecoderLayer. Previous value: {training_args.fsdp_config['transformer_layer_cls_to_wrap']}")
+                training_args.fsdp_config["transformer_layer_cls_to_wrap"] = ["Qwen2DecoderLayer"]
+
+            model = CambrianQwenForCausalLM.from_pretrained(
+                model_name,
+                cache_dir=training_args.cache_dir,
+                do_sample=True,
+                torch_dtype=(torch.bfloat16 if training_args.bf16 else None),
+                **bnb_model_from_pretrained_args
+            )
+            transformers.models.qwen2.modeling_qwen2.Qwen2RMSNorm.forward = forward
         elif "phi-3" in model_name.lower():
             logger.warning(f"Vision tower, loading CambrianPhi3ForCausalLM: {model_args.model_name_or_path}")
             
@@ -1635,6 +1731,8 @@ def train(INDEX, attn_implementation=None):
             model_max_length=training_args.model_max_length,
             padding_side="right"
         )
+    elif "qwen" in model_args.model_name_or_path.lower():
+        tokenizer = transformers.AutoTokenizer.from_pretrained(model_args.model_name_or_path, cache_dir=training_args.cache_dir, model_max_length=training_args.model_max_length, padding_side="right")
     else:
         tokenizer = transformers.AutoTokenizer.from_pretrained(
             model_args.model_name_or_path,

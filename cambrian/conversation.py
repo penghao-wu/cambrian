@@ -379,6 +379,17 @@ A conversation between a user and an LLM-based AI assistant. The assistant gives
     sep="<|im_end|>",
 )
 
+conv_qwen = Conversation(
+    system="""<|im_start|>system
+You are a helpful assistant.""",
+    roles=("<|im_start|>user", "<|im_start|>assistant"),
+    version="qwen",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.CHATML,
+    sep="<|im_end|>",
+)
+
 conv_gemma = Conversation(
     system="""""",
     roles=("<start_of_turn>user\n", "<start_of_turn>model\n"),
@@ -560,7 +571,8 @@ conv_phi3 = Conversation(
 )
 
 # default_conversation = conv_chatml_direct
-default_conversation = conv_vicuna_v1
+# default_conversation = conv_vicuna_v1
+default_conversation = conv_qwen
 # default_conversation = conv_cambrian_plain
 
 # default_conversation = conv_llama_3
@@ -594,6 +606,9 @@ conv_templates = {
     "mpt": conv_mpt,
     "conv_gemma": conv_gemma,
     "phi3": conv_phi3,
+
+    "qwen_1_5": conv_qwen,
+    "qwen_2": conv_qwen,
 }
 
 
