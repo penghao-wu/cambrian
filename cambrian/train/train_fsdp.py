@@ -1754,7 +1754,6 @@ def train(INDEX, attn_implementation=None):
         tokenizer.pad_token = "<|reserved_special_token_0|>"
         tokenizer.pad_token_id = 128002
     elif "qwen" in model_args.version:
-        tokenizer.pad_token = "<|endoftext|>"
         tokenizer.pad_token_id = 151643
     else:
         tokenizer.pad_token = tokenizer.unk_token
