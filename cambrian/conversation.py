@@ -12,6 +12,7 @@ class SeparatorStyle(Enum):
     TWO = auto()
     MPT = auto()
     PLAIN = auto()
+    CHATML = auto()
     LLAMA_2 = auto()
     LLAMA_3 = auto()
     MISTRAL = auto()
@@ -97,6 +98,17 @@ class Conversation:
                 else:
                     ret += ""
             ret = ret.lstrip(self.sep)
+        elif self.sep_style == SeparatorStyle.CHATML:
+            ret = "" if self.system == "" else self.system + self.sep + "\n"
+            for role, message in messages:
+                if message:
+                    if type(message) is tuple:
+                        message, images, _ = message
+                        message = "<image>" * len(images) + message
+                    ret += role + "\n" + message + self.sep + "\n"
+                else:
+                    ret += role + "\n"
+            return ret
         elif self.sep_style == SeparatorStyle.LLAMA_3:
             wrap_sys = lambda msg: f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>{msg}<|eot_id|>" if len(msg) > 0 else msg
             wrap_inst_user = lambda msg: f"<|start_header_id|>user<|end_header_id|>{msg}<|eot_id|>"
