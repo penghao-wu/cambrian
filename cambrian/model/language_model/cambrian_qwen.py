@@ -206,8 +206,6 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				hidden_states_vision_full = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]
 
 				if (i+1) in skip_layers:
-					assert False, i
-
 					bs = hidden_states_vision_full.shape[0]
 					image_features_full_with_newline = hidden_states_vision_full.clone()
 					image_features_full_with_newline = image_features_full_with_newline.view(bs, image_token_len_per_side, image_token_len_per_side+1, -1)
