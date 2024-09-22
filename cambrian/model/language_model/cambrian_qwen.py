@@ -128,7 +128,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		# skip_layers = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
 		# skip_layers = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
 		# skip_layers = [_ for _ in range(0, 32)]
-		skip_layers = [_ for _ in range(18, 24)]
+		skip_layers = [_ for _ in range(16, 28)]
 		# skip_layers += [0, 1, 2, 3, 4, 5]
 
 		# skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
@@ -205,7 +205,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				hidden_states_sys = layer_outputs[0][:, :vision_token_start_idx]
 				hidden_states_vision_full = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]
 
-				if i == skip_layers[0]-1:
+				if (i+1) in skip_layers:
 
 					bs = hidden_states_vision_full.shape[0]
 					image_features_full_with_newline = hidden_states_vision_full.clone()
