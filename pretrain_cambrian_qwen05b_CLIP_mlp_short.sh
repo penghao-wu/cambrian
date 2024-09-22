@@ -3,12 +3,12 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_576_shareGPT4V_pretrain" &&
+export CKPT_NAME="cambrian_qwen7b_CLIP_mlp_576_shareGPT4V_pretrain" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path "Qwen/Qwen2-0.5B-Instruct" \
+    --model_name_or_path "Qwen/Qwen2-7B-Instruct" \
     --version qwen_1_5 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
