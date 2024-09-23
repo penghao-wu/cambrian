@@ -1338,7 +1338,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 			position_ids_image_full.append(torch.zeros((max_num_image_crops*per_crop_token_len,), dtype=torch.long))
 			position_ids_image_compress.append(torch.zeros((max_num_image_crops*(per_crop_token_len//compress_reduce_factor**2),), dtype=torch.long))
 			position_ids_newline_full.append(torch.zeros((max_num_image_crops,), dtype=torch.long))
-			position_ids_text.append((cur_attention_mask.cumsum()-1).to(torch.long))
+			position_ids_text.append((cur_attention_mask.cumsum(0)-1).to(torch.long))
 
 			labels_image_full.append(torch.full((max_num_image_crops*per_crop_token_len,), IGNORE_INDEX, dtype=torch.long))
 			labels_newline_full.append(torch.full((max_num_image_crops,), IGNORE_INDEX, dtype=torch.long))
@@ -1511,7 +1511,7 @@ def repeat_image_tokens(input_ids, labels, nums):
 			new_input_ids.extend([IMAGE_TOKEN_INDEX] * nums[i])
 			new_labels.extend([labels[image_indices[i + 1]].item()] * nums[i])
 
-	return torch.tensor(image_indices, dtype=torch.long), torch.tensor(new_labels, dtype=torch.long)
+	return torch.tensor(new_input_ids, dtype=torch.long), torch.tensor(new_labels, dtype=torch.long)
 
 
 @dataclass
