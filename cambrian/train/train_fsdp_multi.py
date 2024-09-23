@@ -1496,7 +1496,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 
 
 def repeat_image_tokens(input_ids, labels, nums):
-	image_indices = (input_ids == IMAGE_TOKEN_INDEX).nonzero(as_tuple=True)[0]
+	image_indices = torch.where(input_ids == IMAGE_TOKEN_INDEX)[0].tolist()
 	assert len(image_indices) == len(nums)
 
 	new_input_ids = []
