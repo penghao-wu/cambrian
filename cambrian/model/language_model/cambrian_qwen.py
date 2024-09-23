@@ -279,14 +279,11 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 		self,
 		input_ids: torch.LongTensor = None,
 		attention_masks: Optional[torch.Tensor] = None,
-		attention_mask_c2f: Optional[torch.Tensor] = None,
-		attention_masks_all2all: Optional[torch.Tensor] = None,
-		image_valid_mask: Optional[torch.Tensor] = None,
-		vision_full_attention_mask:Optional[torch.Tensor] = None,
-		position_ids_sys: Optional[torch.LongTensor] = None,
-		position_ids_vision_concise: Optional[torch.LongTensor] = None,
-		position_ids_vision_full: Optional[torch.LongTensor] = None,
-		position_ids_vision_text: Optional[torch.LongTensor] = None,
+		attention_mask_regular_4d: Optional[torch.Tensor] = None,
+		attention_mask_compress_4d: Optional[torch.Tensor] = None,
+		position_ids: Optional[torch.LongTensor] = None,
+		position_ids_image_compress: Optional[torch.LongTensor] = None,
+		position_ids_newline_compress: Optional[torch.LongTensor] = None,
 		past_key_values: Optional[List[torch.FloatTensor]] = None,
 		inputs_embeds: Optional[torch.FloatTensor] = None,
 		labels: Optional[torch.LongTensor] = None,
@@ -294,10 +291,8 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 		output_attentions: Optional[bool] = None,
 		output_hidden_states: Optional[bool] = None,
 		images: Optional[torch.FloatTensor] = None,
-		image_aux_attention_masks_list: Optional[List[torch.Tensor]] = None,
 		image_sizes: Optional[List[List[int]]] = None,
 		return_dict: Optional[bool] = None,
-		gist_token_positions: Optional[torch.LongTensor] = None,
 		cache_position = None
 	) -> Union[Tuple, CausalLMOutputWithPast]:
 
@@ -305,17 +300,9 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 			(
 				input_ids,
 				inputs_embeds,
-				inputs_embeds_vision_concise,
-				vision_tower_aux_feature_list,
-				vision_tower_aux_attention_masks_list,
-				final_vision_feature_size,
-				global_context_feature
 			) = self.prepare_inputs_labels_for_multimodal(
 				input_ids,
 				images,
-				image_aux_attention_masks_list,
-				vision_full_attention_mask,
-				image_sizes
 			)
 		if IS_XLA_AVAILABLE:
 			# Very Important for TorchXLA

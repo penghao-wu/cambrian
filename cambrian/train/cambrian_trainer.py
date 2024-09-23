@@ -316,6 +316,36 @@ class CambrianTrainer(Trainer):
                         "lr": self.args.mm_vision_sampler_lr,
                     },
                 ]
+            elif self.args.mm_vision_mlp_lr is not None:
+                vision_mlp_parameters = [name for name, _ in opt_model.named_parameters() if ("vision_mlp" in name) ]
+                optimizer_grouped_parameters = [
+                    {
+                        "params": [
+                            p for n, p in opt_model.named_parameters() if (n in decay_parameters and n not in vision_mlp_parameters and p.requires_grad)
+                        ],
+                        "weight_decay": self.args.weight_decay,
+                    },
+                    {
+                        "params": [
+                            p for n, p in opt_model.named_parameters() if (n not in decay_parameters and n not in vision_mlp_parameters and p.requires_grad)
+                        ],
+                        "weight_decay": 0.0,
+                    },
+                    {
+                        "params": [
+                            p for n, p in opt_model.named_parameters() if (n in decay_parameters and n in vision_mlp_parameters and p.requires_grad)
+                        ],
+                        "weight_decay": self.args.weight_decay,
+                        "lr": self.args.mm_vision_mlp_lr,
+                    },
+                    {
+                        "params": [
+                            p for n, p in opt_model.named_parameters() if (n not in decay_parameters and n in vision_mlp_parameters and p.requires_grad)
+                        ],
+                        "weight_decay": 0.0,
+                        "lr": self.args.mm_vision_mlp_lr,
+                    },
+                ]
             elif self.args.unfreeze_mm_vision_tower and self.args.mm_vision_tower_lr is not None:
                 vision_tower_parameters = [name for name, _ in opt_model.named_parameters() if "vision_tower" in name]
                 optimizer_grouped_parameters = [

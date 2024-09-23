@@ -97,16 +97,23 @@ class ModelArguments:
 	mm_patch_merge_type: Optional[str] = field(default='flat')
 	mm_vision_select_feature: Optional[str] = field(default="patch")
 	vision_tower_aux_token_len_list: Optional[str] = field(default=None)
-	image_token_len: Optional[int] = field(default=576)
-	image_token_len_concise: Optional[int] = field(default=36)
 	num_query_group: Optional[int] = field(default=1)
 	query_num_list: Optional[str] = field(default='[576]')
 	connector_depth: Optional[int] = field(default=1)
 	vision_hidden_size: Optional[int] = field(default=1024)
 	connector_only: bool = field(default=True)
+
 	num_of_vision_sampler_layers: Optional[int] = field(default=10)
 	start_of_vision_sampler_layers: Optional[int] = field(default=16)
 	stride_of_vision_sampler_layers: Optional[int] = field(default=1)
+
+	# compressV
+	max_num_image_crops: Optional[int] = field(default=1)
+	per_crop_token_len: Optional[int] = field(default=576)
+	compress_reduce_factor: Optional[int] = field(default=4)
+
+	compress_v: Optional[bool] = field(default=False)
+	compress_v_start_layer: Optional[int] = field(default=0)
 
 
 @dataclass
@@ -157,6 +164,7 @@ class TrainingArguments(transformers.TrainingArguments):
 	mm_vision_sampler_lr: Optional[float] = None
 	group_by_modality_length: bool = field(default=False)
 	mm_vision_tower_lr: Optional[float] = None
+	mm_vision_mlp_lr: Optional[float] = None
 
 	# sanity check arg
 	batch_size: Optional[int] = field(
@@ -250,7 +258,7 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
 	output_dir = os.path.join('checkpoints', output_dir.split(os.sep)[-1])
 	if getattr(trainer.args, "tune_mm_mlp_adapter", False):
 		# Only save Adapter
-		keys_to_match = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline']
+		keys_to_match = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline', 'vision_mlp_layers']
 		if getattr(trainer.args, "use_im_start_end", False):
 			keys_to_match.extend(['embed_tokens', 'embed_in'])
 
@@ -1022,7 +1030,7 @@ class LazySupervisedDataset(Dataset):
 		with open(self.data_path, 'r') as file:
 			for line in file:
 				sample = json.loads(line.strip())
-				img_tokens = self.data_args.image_token_len if self._has_image(sample) else 0
+				img_tokens = 128 if self._has_image(sample) else 0
 				cur_len = sum(len(conv['value'].split()) for conv in sample['conversations'])
 				self.length_list.append(cur_len + img_tokens)
 				modality_len = cur_len if 'image' in sample else -cur_len
@@ -1193,6 +1201,8 @@ class LazySupervisedDataset(Dataset):
 					time_instruciton = f"The video lasts for {video_time:.2f} seconds, and {num_frames_to_sample} frames are uniformly sampled from it. These frames are located at {frame_time}.Please answer the following questions related to this video."
 					sources[0]["conversations"][0]["value"] = f'{DEFAULT_IMAGE_TOKEN}\n{time_instruciton}\n{sources[0]["conversations"][0]["value"].replace(DEFAULT_IMAGE_TOKEN, "")}'
 				image = [(image, video[0].size, "video")]
+				images = torch.cat([img[0] for img in image])
+				image2crops_nums = [1] * images.shape[0]
 				sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
 				# print(sources)
 			except Exception as e:
@@ -1204,6 +1214,9 @@ class LazySupervisedDataset(Dataset):
 				self.data_args)
 		else:
 			sources = copy.deepcopy([e["conversations"] for e in sources])
+
+		has_image = has_image or "video" in sources[0]
+
 		data_dict = preprocess(
 			sources,
 			self.tokenizer,
@@ -1212,17 +1225,33 @@ class LazySupervisedDataset(Dataset):
 			data_dict = dict(input_ids=data_dict["input_ids"][0],
 							 labels=data_dict["labels"][0])
 		if (data_dict['labels']!=IGNORE_INDEX).sum()==0:
-			return self.__getitem__(0)
+			return self._get_item(i+1)
+		
+		# check whether image tokens will be truncated, if so, discard this sample
+		if has_image or self.data_args.is_multimodal:    
+			max_num_image_crops = self.data_args.max_num_image_crops
+			per_crop_token_len = self.data_args.per_crop_token_len
+			num_images = (data_dict['input_ids'] == IMAGE_TOKEN_INDEX).sum()
+			if num_images == 0:
+				# dummy image
+				pre_text_token_num = 0
+			else:
+				last_image_token_index = torch.where(data_dict['input_ids'] == IMAGE_TOKEN_INDEX)[0].tolist()[-1]
+				pre_text_token_num = (last_image_token_index+1) - num_images
+
+			if pre_text_token_num + (max_num_image_crops*(per_crop_token_len+1)) >= self.tokenizer.model_max_length-1:
+				print("Skip this sample as its image tokens padded get truncated")
+				return self._get_item(i + 1)
+
 		# image exist in the data
 		if has_image:
-			data_dict['image_aux_list'] = image_aux_list
+			data_dict['images'] = images
 		elif self.data_args.is_multimodal:
 			# image does not exist in the data, but the model is multimodal
-			crop_size = 336
-			processor_aux_list = self.data_args.image_processor_aux_list
-			data_dict['image_aux_list'] = [torch.zeros(3, processor_aux.crop_size['height'], processor_aux.crop_size['width']) for processor_aux in processor_aux_list]
-			image_size = (crop_size, crop_size)
-		data_dict['image_size'] = image_size
+			processor = self.data_args.image_processor_aux_list[0]
+			data_dict['images'] = torch.zeros(self.data_args.max_num_image_crops, 3, processor.crop_size['height'], processor.crop_size['width'])
+			data_dict['image2crops_nums'] = []
+		data_dict['image2crops_nums'] = image2crops_nums
 		return data_dict
 
 def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, dummy_num=1):
@@ -1285,7 +1314,7 @@ def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_m
 	return causal_mask
 	
 
-def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, image_aux_token_len_list=[24*24], max_length=2048, pad_token_id=0):
+def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length=2048, pad_token_id=0):
 
 	input_ids_text = []
 
@@ -1475,9 +1504,28 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 	attention_mask_regular_4d = calculate_causal_attention_mask(position_ids, position_ids, attention_mask)
 
 	# compressv attention: Q=[image_compress, newline_compress, text], KV=[image_compress, newline_compress, image_full, newline_full, text]
-	attention_mask_fast_4d = calculate_causal_attention_mask(torch.cat([position_ids_image_compress, position_ids_newline_compress, position_ids_text]), torch.cat([position_ids_image_compress, position_ids_newline_compress, position_ids_image_full, position_ids_newline_full, position_ids_text]), torch.cat([attention_mask_image_compress, attention_mask_newline_compress, attention_mask_image_full, attention_mask_newline_full, attention_mask_text]))
+	attention_mask_compress_4d = calculate_causal_attention_mask(torch.cat([position_ids_image_compress, position_ids_newline_compress, position_ids_text]), torch.cat([position_ids_image_compress, position_ids_newline_compress, position_ids_image_full, position_ids_newline_full, position_ids_text]), torch.cat([attention_mask_image_compress, attention_mask_newline_compress, attention_mask_image_full, attention_mask_newline_full, attention_mask_text]))
 
-	return input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, position_ids_newline_compress, attention_mask_regular_4d, attention_mask_fast_4d
+	return input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, position_ids_newline_compress, attention_mask_regular_4d, attention_mask_compress_4d
+
+
+def repeat_image_tokens(input_ids, labels, nums):
+	image_indices = (input_ids == DEFAULT_IMAGE_TOKEN).nonzero(as_tuple=True)[0]
+	assert len(image_indices) == len(nums)
+
+	new_input_ids = []
+	new_labels = []
+	image_indices = [-1] + image_indices + [input_ids.shape[0]]
+
+	for i in range(len(image_indices) - 1):
+		new_input_ids.extend(input_ids[image_indices[i] + 1 : image_indices[i + 1]].tolist())
+		new_labels.extend(labels[image_indices[i] + 1 : image_indices[i + 1]].tolist())
+		
+		if i < len(nums):
+			new_input_ids.extend([DEFAULT_IMAGE_TOKEN] * nums[i])
+			new_labels.extend([labels[image_indices[i + 1]].item()] * nums[i])
+
+	return torch.tensor(image_indices, dtype=torch.long), torch.tensor(new_labels, dtype=torch.long)
 
 
 @dataclass
@@ -1488,13 +1536,11 @@ class DataCollatorForSupervisedDataset(object):
 	max_num_image_crops: int
 	per_crop_token_len: int
 	compress_reduce_factor: int
-	image_aux_token_len_list: list
 
 	def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
 		max_num_image_crops = self.max_num_image_crops
 		per_crop_token_len = self.per_crop_token_len
 		compress_reduce_factor = self.compress_reduce_factor
-		image_aux_token_len_list = self.image_aux_token_len_list
 
 		input_ids, labels = tuple([instance[key] for instance in instances]
 								  for key in ("input_ids", "labels"))
@@ -1505,31 +1551,41 @@ class DataCollatorForSupervisedDataset(object):
 
 		# print_rank0("Pad token id is", self.tokenizer.pad_token_id)
 
-		input_ids = torch.stack(input_ids)
-		labels = torch.stack(labels)
-		attention_mask = input_ids.ne(self.tokenizer.pad_token_id)
+		image2crops_nums = [instance['image2crops_nums'] for instance in instances]
 
-		image_sizes = [instance['image_size'] for instance in instances]
+		input_ids_crops_repeated = []
+		labels_crops_repeated = []
+		for batch_i in range(len(input_ids)):
+			cur_image2crops_nums = image2crops_nums[batch_i]
+			cur_input_ids = input_ids[batch_i]
+			cur_labels = labels[batch_i]
+			if len(cur_image2crops_nums) > 0:
+				cur_input_ids, cur_labels = repeat_image_tokens(cur_input_ids, cur_labels, cur_image2crops_nums)
+			input_ids_crops_repeated.append(cur_input_ids)
+			labels_crops_repeated.append(cur_labels)
+				
+		attention_mask = [cur_input_ids.ne(self.tokenizer.pad_token_id) for cur_input_ids in input_ids_crops_repeated]
 
-		input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, position_ids_newline_compress, attention_mask_regular_4d, attention_mask_fast_4d = prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length, self.tokenizer.pad_token_id)
+		input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, position_ids_newline_compress, attention_mask_regular_4d, attention_mask_compress_4d = prepare_multimodal_data(input_ids_crops_repeated, labels_crops_repeated, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length, self.tokenizer.pad_token_id)
 	
 		batch = dict(
 			input_ids=input_ids_text,
 			labels=labels,
 			attention_mask=attention_mask,
 			attention_mask_regular_4d=attention_mask_regular_4d,
-			attention_mask_fast_4d=attention_mask_fast_4d,
+			attention_mask_compress_4d=attention_mask_compress_4d,
 			position_ids=position_ids,
 			position_ids_image_compress=position_ids_image_compress,
 			position_ids_newline_compress=position_ids_newline_compress,
 		)
-		if 'image_aux_list' in instances[0]:
-			image_aux_list = [instance['image_aux_list'] for instance in instances]
-			image_aux_list = [list(batch_image_aux) for batch_image_aux in zip(*image_aux_list)]
-			if all(x is not None and x.shape == image_aux_list[0][0].shape for x in image_aux_list[0]):
-				batch['images'] = [torch.stack(image_aux) for image_aux in image_aux_list]
-			else:
-				batch['images'] = image_aux_list
+		if 'images' in instances[0]:
+			images_padded = []
+			for instance in instances:
+				images = instance['images']
+				if images.shape[0] < max_num_image_crops:
+					images = torch.cat([images, torch.zeros((max_num_image_crops-images, *images.shape[1:]), dtype=images.dtype)])
+				images_padded.append(images)
+			batch['images'] = torch.stack(images_padded)
 
 		return batch
 
@@ -1544,20 +1600,13 @@ def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
 			'tokenizer': tokenizer,
 		}
 
-	if hasattr(data_args, 'image_token_len'):
-		data_collator_kwargs['image_token_len'] = data_args.image_token_len
-	if hasattr(data_args, 'image_token_len_concise'):
-		data_collator_kwargs['image_token_len_concise'] = data_args.image_token_len_concise
+	if hasattr(data_args, 'max_num_image_crops'):
+		data_collator_kwargs['max_num_image_crops'] = data_args.max_num_image_crops
+	if hasattr(data_args, 'per_crop_token_len'):
+		data_collator_kwargs['per_crop_token_len'] = data_args.per_crop_token_len
+	if hasattr(data_args, 'compress_reduce_factor'):
+		data_collator_kwargs['compress_reduce_factor'] = data_args.compress_reduce_factor
 
-	if hasattr(data_args, 'vision_tower_aux_token_len_list'):
-		data_collator_kwargs['image_aux_token_len_list'] = data_args.vision_tower_aux_token_len_list
-	else:
-		data_collator_kwargs['image_aux_token_len_list'] = [data_args.image_token_len]
-
-	if hasattr(data_args, 'image_position'):
-		data_collator_kwargs['image_position'] = data_args.image_position
-
-	data_collator_kwargs['step'] = 0
 
 	data_collator = DataCollatorForSupervisedDataset(**data_collator_kwargs)
 
@@ -1651,15 +1700,11 @@ def train(INDEX, attn_implementation=None):
 		log_rank0(f"Loading model in full precision")
 
 	use_cohere = False
-	data_args.image_token_len = model_args.image_token_len
-	data_args.image_token_len_concise = model_args.image_token_len_concise
+	data_args.max_num_image_crops = model_args.max_num_image_crops
+	data_args.per_crop_token_len = model_args.per_crop_token_len
+	data_args.compress_reduce_factor = model_args.compress_reduce_factor
 
 	if model_args.vision_tower_aux_list is not None:
-		# copy image_token_len and image_position to model_args
-		# data_args.image_token_len = model_args.image_token_len
-		model_args.image_position = data_args.image_position
-
-		
 		# Assuming model_args.model_name_or_path is a string that includes the model size
 		model_name = model_args.model_name_or_path
 
@@ -1872,14 +1917,13 @@ def train(INDEX, attn_implementation=None):
 		model.config.image_aspect_ratio = data_args.image_aspect_ratio
 		model.config.tokenizer_padding_side = tokenizer.padding_side
 		model.config.tokenizer_model_max_length = tokenizer.model_max_length
-		model.config.image_position = data_args.image_position
 
 		model.config.tune_mm_mlp_adapter = training_args.tune_mm_mlp_adapter = model_args.tune_mm_mlp_adapter
 		if model_args.tune_mm_mlp_adapter:
 			model.requires_grad_(False)
 			# for p in model.get_model().mm_projector.parameters():
 			#     p.requires_grad = True
-			tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline']
+			tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline', 'vision_mlp_layers']
 			for name, param in model.named_parameters():
 				if any(listed_name in name for listed_name in tune_modules):
 					print_rank0('tuning {}'.format(name))
@@ -1900,11 +1944,13 @@ def train(INDEX, attn_implementation=None):
 			model.get_model().mm_projector.to(dtype=compute_dtype, device=training_args.device)
 
 		model.config.mm_use_im_start_end = data_args.mm_use_im_start_end = model_args.mm_use_im_start_end
-		model.config.image_token_len = data_args.image_token_len = model_args.image_token_len
-		model.config.image_token_len_concise = data_args.image_token_len_concise = model_args.image_token_len_concise
+		model.config.max_num_image_crops = data_args.max_num_image_crops = model_args.max_num_image_crops
+		model.config.per_crop_token_len = data_args.per_crop_token_len = model_args.per_crop_token_len
+		model.config.compress_reduce_factor = data_args.compress_reduce_factor = model_args.compress_reduce_factor
 		model.config.mm_projector_lr = training_args.mm_projector_lr
 		model.config.mm_vision_sampler_lr = training_args.mm_vision_sampler_lr
 		model.config.mm_vision_tower_lr = training_args.mm_vision_tower_lr
+		model.config.mm_vision_mlp_lr = training_args.mm_vision_mlp_lr
 		training_args.use_im_start_end = model_args.mm_use_im_start_end
 		model.config.mm_use_im_patch_token = model_args.mm_use_im_patch_token
 		model.config.vision_tower_aux_token_len_list = data_args.vision_tower_aux_token_len_list = model_args.vision_tower_aux_token_len_list

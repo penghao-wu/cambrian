@@ -23,7 +23,8 @@ from ezcolorlog import root_logger as logger
 
 from .multimodal_encoder.builder import build_vision_tower_aux_list
 from .multimodal_projector.builder import build_vision_projector
-from .vision_sampler import VisionTokenSampler, VisionMLP, VisionSA
+# from .vision_sampler import VisionTokenSampler, VisionMLP, VisionSA
+from .vision_mlp import VisionMLP
 
 from cambrian.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
@@ -112,15 +113,18 @@ class CambrianMetaModel:
         vision_hidden_size = model_args.vision_hidden_size
         vision_tower_aux_list = model_args.vision_tower_aux_list
         vision_tower_aux_token_len_list = model_args.vision_tower_aux_token_len_list
-        image_token_len = model_args.image_token_len
         mm_vision_select_layer = model_args.mm_vision_select_layer
         mm_vision_select_feature = model_args.mm_vision_select_feature
         pretrain_mm_mlp_adapter = model_args.pretrain_mm_mlp_adapter
         connector_only = model_args.connector_only
         connector_depth = model_args.connector_depth
 
-        # self.config.mm_vision_tower = vision_tower
-        self.config.image_token_len = image_token_len
+        max_num_image_crops = model_args.connector_depth
+        per_crop_token_len = model_args.per_crop_token_len
+        compress_reduce_factor = model_args.compress_reduce_factor
+        compress_v = model_args.compress_v
+        compress_v_start_layer = model_args.compress_v_start_layer
+
         self.config.num_query_group = num_query_group
         self.config.query_num_list = query_num_list
         assert num_query_group == len(query_num_list)
@@ -128,6 +132,12 @@ class CambrianMetaModel:
         self.config.mm_vision_tower_aux_list = vision_tower_aux_list
         self.config.mm_vision_tower_aux_token_len_list = vision_tower_aux_token_len_list
         self.config.connector_only = connector_only
+
+        self.config.max_num_image_crops = max_num_image_crops
+        self.config.per_crop_token_len = per_crop_token_len
+        self.config.compress_reduce_factor = compress_reduce_factor
+        self.config.compress_v = compress_v
+        self.config.compress_v_start_layer = compress_v_start_layer
 
         if self.get_vision_tower_aux_list() is None:
             vision_tower_aux_list = build_vision_tower_aux_list(model_args)
@@ -184,24 +194,13 @@ class CambrianMetaModel:
                 self.image_newline = nn.Parameter(
                     torch.randn(self.config.hidden_size, dtype=self.dtype) * embed_std
                 )
-                self.vision_sampler_layers = nn.ModuleList(
-                    [VisionMLP(self.config, self.config.hidden_size//2) for layer_idx in range(0, self.config.num_hidden_layers)]
-                    )
-                # for i in range(self.config.num_hidden_layers):
-                    # self.layers[i].vision_sampler_layers = VisionMLP(self.config)
+                if compress_v:
+                    num_of_vision_mlp_layers = self.config.num_hidden_layers - compress_v_start_layer
+                    self.config.num_of_vision_mlp_layers = num_of_vision_mlp_layers
+                    self.vision_mlp_layers = nn.ModuleList(
+                        [VisionMLP(self.config, self.config.hidden_size//4) for layer_idx in range(0, num_of_vision_mlp_layers)]
+                        )
 
-                # self.vision_up_aux = nn.ModuleList(
-                #     [nn.Linear(self.config.hidden_size, self.config.hidden_size, bias=False) for _ in range(0, self.config.num_hidden_layers)]
-                #     )
-
-                # self.mm_projector_aux_0 = nn.Linear(self.config.hidden_size, vision_hidden_size)
-                # self.mm_projector_aux_1 = nn.Linear(vision_hidden_size, self.config.hidden_size)
-
-                # vision_embed_std = 1 / torch.sqrt(torch.tensor(self.config.hidden_size, dtype=self.dtype))
-                # self.vision_query = nn.Parameter(
-                #     torch.randn((num_query_group, vision_hidden_size), dtype=self.dtype) * vision_embed_std
-                # )
-                # self.vision_sampler = VisionTokenSampler(vision_hidden_size, vision_hidden_size, [vision_hidden_size], [4], vision_hidden_size, 3)
         else:
             # In case it is frozen by LoRA
             for p in self.mm_projector.parameters():
@@ -226,13 +225,7 @@ class CambrianMetaModel:
                 self.vision_query.data = mm_projector_weights['model.vision_query']
             self.image_newline.data = mm_projector_weights['model.image_newline']
 
-            # for i in range(self.config.num_hidden_layers):
-            #     self.layers[i].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
-            # self.vision_query.data = mm_projector_weights['model.vision_query']
-            # self.mm_projector_aux_0.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_0'),strict=True)
-            # self.mm_projector_aux_1.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_1'),strict=True)
-            # self.vision_sampler.load_state_dict(get_w(mm_projector_weights, 'vision_sampler'),strict=True)
-            self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
+            self.vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, 'vision_mlp_layers'),strict=True)
 
 
 def unmask_attention_mask(mask, original_size):
@@ -397,296 +390,19 @@ class CambrianMetaForCausalLM(ABC):
 
     def prepare_inputs_labels_for_multimodal(
         self, input_ids,
-        images, image_aux_attention_masks_list=None, vision_full_attention_mask=None, image_sizes=None
+        images
     ):
         # vision_tower = self.get_vision_tower()
         vision_tower_aux_list = self.get_model().get_vision_tower_aux_list()
-        if vision_tower_aux_list is None or images is None or input_ids.shape[1] == 1:
-            return input_ids, position_ids, attention_mask, None, None, None, None, None, None, None
 
-        image_aux_list = images
+        assert images.ndim == 5
+        bs = images.shape[0]
 
-        bs = image_aux_list[0].shape[0]
-        dtype = image_aux_list[0].dtype
+        max_num_image_crops = self.get_model().config.max_num_image_crops
 
-        image_token_len = self.get_model().config.image_token_len
-        image_token_len_concise = self.get_model().config.image_token_len_concise
-        query_num_list = self.get_model().config.query_num_list
+        bs = 
 
-        final_height = final_width  = int(image_token_len**0.5)
-        final_height_concise = final_width_concise  = int(image_token_len_concise**0.5)
-
-        final_image_features_list = []
-
-        # only needed for sva
-        vision_tower_aux_feature_list_final = None
-        vision_tower_aux_attention_masks_list_final = None
-        global_context_feature_final = None
-
-        image_aux_features_list = self.encode_images(image_aux_list)
-
-        if self.get_model().config.mm_projector_type == 'sva':
-            vision_tower_aux_feature_list = []
-            vision_tower_aux_attention_masks_list = []
-            # get vision tokens from each vision tower
-            for aux_i in range(len(vision_tower_aux_list)):
-                image_aux_features = image_aux_features_list[aux_i]
-
-                image_aux_features = getattr(self.get_model(), 'mm_projector_aux_{}'.format(aux_i))(image_aux_features).to(dtype)
-                if aux_i == 0:
-                    global_context_feature = image_aux_features.mean(1).view(bs, 1, 1, -1)
-
-                vision_tower_aux_feature_list.append(image_aux_features)
-
-            # perform vision sampling for each query group
-            for query_group_i, query_num in enumerate(query_num_list):
-                query_features_i = self.get_model().vision_query[query_group_i, :].view(1, 1, 1, -1).expand(bs, query_num, -1, -1)
-                global_context_feature_i = global_context_feature.expand(-1, query_num, 1, -1).flatten(0,1)
-                query_side_len = int(query_num**0.5)
-                if IS_XLA_AVAILABLE:
-                    vision_tower_aux_feature_list_i, vision_tower_aux_attention_masks_list_i = self.rearrange_vision_tower_features_train(vision_tower_aux_feature_list, image_aux_attention_masks_list, query_side_len)
-                else:
-                    vision_tower_aux_feature_list_i, vision_tower_aux_attention_masks_list_i = self.rearrange_vision_tower_features_inference(vision_tower_aux_feature_list, query_side_len,
-                        image_sizes)
-
-                query_features_i = getattr(self.get_model(), "vision_sampler_{}".format(query_group_i))(query_features_i.flatten(0,1), global_context_feature_i, None, *vision_tower_aux_feature_list_i, *vision_tower_aux_attention_masks_list_i)
-                query_features_i = query_features_i.view(bs, query_num, -1)
-                # interpolate to the final target size
-                if query_side_len != final_height:
-                    query_features_i = query_features_i.permute(0, 2, 1).contiguous().view(bs, -1, query_side_len, query_side_len)
-                    query_features_i = F.interpolate(query_features_i.float(), 
-                                                    size=(final_height, final_width), 
-                                                    mode='bilinear', 
-                                                    align_corners=False).to(dtype=query_features_i.dtype)
-                    query_features_i = query_features_i.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
-                final_image_features_list.append(query_features_i)
-
-            if IS_XLA_AVAILABLE:
-                vision_tower_aux_feature_list_final, vision_tower_aux_attention_masks_list_final = self.rearrange_vision_tower_features_train(vision_tower_aux_feature_list, image_aux_attention_masks_list, final_height)
-                global_context_feature_final = global_context_feature.expand(-1, final_height*final_width, 1, -1).flatten(0,1)
-        else:
-            final_image_features_list = image_aux_features_list
-
-        image_features = torch.cat(final_image_features_list, -1)
-        image_features = self.get_model().mm_projector(image_features).to(dtype)
-
-
-        # image_features_concise = self.prepare_concise_feature_sva(image_features, vision_full_attention_mask, (final_height, final_width), (final_height_concise, final_width_concise)).to(image_features.dtype).flatten(1, 2)
-
-        image_features_concise = F.interpolate(
-                image_features.view(bs, final_height, final_width, -1).permute(0, 3, 1, 2).contiguous().to(torch.float32),
-                size=(final_height_concise, final_width_concise),
-                mode='bilinear',
-                align_corners=False
-            ).to(image_features.dtype)
-        image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
-
-        if IS_XLA_AVAILABLE:
-            image_features = image_features.view(bs, final_height, final_width, -1)
-            image_features = torch.cat((
-                image_features,
-                self.model.image_newline[None, None, None, :].expand(bs, final_height, 1, -1)
-            ), dim=2)
-            image_features = image_features.flatten(1, 2)
-
-            image_features_concise = image_features_concise.view(bs, final_height_concise, final_width_concise, -1)
-            image_features_concise = torch.cat((
-                image_features_concise,
-                self.model.image_newline[None, None, None, :].expand(bs, final_height_concise, 1, -1)
-            ), dim=2)
-            image_features_concise = image_features_concise.flatten(1, 2)
-
-
-            final_size = [(final_height, final_width)]*bs
-
-        else:
-            image_features = image_features.view(bs, final_height, final_width, -1)
-            image_features_unpadded = []
-            final_size = []
-            if self.get_model().config.mm_projector_type == 'sva':
-                vision_tower_aux_feature_list_final, vision_tower_aux_attention_masks_list_final = self.rearrange_vision_tower_features_inference(vision_tower_aux_feature_list, final_height, image_sizes, unpad=True)
-                global_context_feature_final = []
-            for batch_i in range(bs):
-                cur_image_feature = image_features[batch_i]
-                image_size = image_sizes[batch_i]
-
-                cur_image_feature = unpad_image(cur_image_feature.unsqueeze(0), image_size)
-
-                cur_h, cur_w = cur_image_feature.shape[1:3]
-                final_size.append((cur_h, cur_w))
-                cur_image_feature = cur_image_feature.view(1, cur_h, cur_w, -1)
-                cur_image_feature = torch.cat((
-                        cur_image_feature,
-                        self.model.image_newline.view(1, 1, 1, -1).expand(1, cur_h, 1, -1).to(cur_image_feature.device)
-                    ), dim=2)
-                cur_image_feature = cur_image_feature.flatten(1, 2)
-                image_features_unpadded.append(cur_image_feature.squeeze(0))
-
-                if self.get_model().config.mm_projector_type == 'sva':
-                    cur_global_context_feature = global_context_feature[batch_i].expand(cur_h*cur_w, 1, -1)
-                    global_context_feature_final.append(cur_global_context_feature)
-            if self.get_model().config.mm_projector_type == 'sva':
-                global_context_feature_final = torch.cat(global_context_feature_final, 0)
-
-            image_features = image_features_unpadded
-
-        # TODO: image start / end is not implemented here to support pretraining.
-        if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end', False):
-            raise NotImplementedError
-
-        if IS_XLA_AVAILABLE:
-
-            # embed the input_ids
-            new_input_ids_padded_for_emb = torch.where(input_ids==IMAGE_TOKEN_INDEX, 0, input_ids)
-            input_embeds = self.get_model().embed_tokens(new_input_ids_padded_for_emb)
-            new_input_embeds = []
-            cur_image_idx = 0
-            # insert the image embeddings
-            for batch_idx, (cur_input_embeds, cur_input_ids) in enumerate(zip(input_embeds, input_ids)):
-                num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
-                if num_images == 0:
-                    cur_image_idx += 1
-                    new_input_embeds.append(cur_input_embeds)
-                    continue
-
-                image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
-
-                cur_input_embeds_im_replaced = []
-
-                prev_image_length = 0
-                for i in range(len(image_token_indices) - 1):
-                    # skip the image tokens (1 indicator + (image_length-1) paddings)
-                    cur_input_embeds_im_replaced.append(cur_input_embeds[image_token_indices[i]+1+prev_image_length:image_token_indices[i+1]])
-                    if i < len(image_token_indices) - 2:
-                        cur_image_features = image_features[cur_image_idx]
-                        prev_image_length = len(cur_image_features)-1
-                        cur_image_idx += 1
-                        cur_input_embeds_im_replaced.append(cur_image_features)
-
-                cur_input_embeds_im_replaced = [x.to(self.device) for x in cur_input_embeds_im_replaced]
-                new_input_embeds.append(torch.cat(cur_input_embeds_im_replaced))
-
-            new_input_embeds = torch.stack(new_input_embeds)
-            return None, new_input_embeds, image_features_concise, vision_tower_aux_feature_list_final, vision_tower_aux_attention_masks_list_final, final_size, global_context_feature_final
-
-        else:
-            # Let's just add dummy tensors if they do not exist,
-            # it is a headache to deal with None all the time.
-            # But it is not ideal, and if you have a better idea,
-            # please open an issue / submit a PR, thanks.
-            _labels = labels
-            _position_ids = position_ids
-            _attention_mask = attention_mask
-            if attention_mask is None:
-                attention_mask = torch.ones_like(input_ids, dtype=torch.bool)
-            else:
-                attention_mask = attention_mask.bool()
-            if position_ids is None:
-                position_ids = torch.arange(0, input_ids.shape[1], dtype=torch.long, device=input_ids.device)
-            if labels is None:
-                labels = torch.full_like(input_ids, IGNORE_INDEX)
-
-            # remove the padding using attention_mask -- FIXME
-            _input_ids = input_ids
-            input_ids = [cur_input_ids[cur_attention_mask] for cur_input_ids, cur_attention_mask in zip(input_ids, attention_mask)]
-            labels = [cur_labels[cur_attention_mask] for cur_labels, cur_attention_mask in zip(labels, attention_mask)]
-
-            new_input_embeds = []
-            new_labels = []
-            cur_image_idx = 0
-            for batch_idx, cur_input_ids in enumerate(input_ids):
-                num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
-                if num_images == 0:
-                    cur_image_features = image_features[cur_image_idx]
-                    cur_input_embeds_1 = self.get_model().embed_tokens(cur_input_ids)
-                    cur_input_embeds = torch.cat([cur_input_embeds_1, cur_image_features[0:0]], dim=0)
-                    new_input_embeds.append(cur_input_embeds)
-                    new_labels.append(labels[batch_idx])
-                    cur_image_idx += 1
-                    continue
-
-                image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
-                cur_input_ids_noim = []
-                cur_labels = labels[batch_idx]
-                cur_labels_noim = []
-                for i in range(len(image_token_indices) - 1):
-                    cur_input_ids_noim.append(cur_input_ids[image_token_indices[i]+1:image_token_indices[i+1]])
-                    cur_labels_noim.append(cur_labels[image_token_indices[i]+1:image_token_indices[i+1]])
-                split_sizes = [x.shape[0] for x in cur_labels_noim]
-                cur_input_embeds = self.get_model().embed_tokens(torch.cat(cur_input_ids_noim))
-                cur_input_embeds_no_im = torch.split(cur_input_embeds, split_sizes, dim=0)
-                cur_new_input_embeds = []
-                cur_new_labels = []
-
-                for i in range(num_images + 1):
-                    cur_new_input_embeds.append(cur_input_embeds_no_im[i])
-                    cur_new_labels.append(cur_labels_noim[i])
-                    if i < num_images:
-                        cur_image_features = image_features[cur_image_idx]
-                        cur_image_idx += 1
-                        cur_new_input_embeds.append(cur_image_features)
-                        cur_new_labels.append(torch.full((cur_image_features.shape[0],), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
-
-                cur_new_input_embeds = [x.to(self.device) for x in cur_new_input_embeds]
-
-                cur_new_input_embeds = torch.cat(cur_new_input_embeds)
-                cur_new_labels = torch.cat(cur_new_labels)
-
-                new_input_embeds.append(cur_new_input_embeds)
-                new_labels.append(cur_new_labels)
-
-            # Truncate sequences to max length as image embeddings can make the sequence longer
-            tokenizer_model_max_length = getattr(self.config, 'tokenizer_model_max_length', None)
-            if tokenizer_model_max_length is not None:
-                new_input_embeds = [x[:tokenizer_model_max_length] for x in new_input_embeds]
-                new_labels = [x[:tokenizer_model_max_length] for x in new_labels]
-
-            # Combine them
-            max_len = max(x.shape[0] for x in new_input_embeds)
-            bs = len(new_input_embeds)
-
-            new_input_embeds_padded = []
-            new_labels_padded = torch.full((bs, max_len), IGNORE_INDEX, dtype=new_labels[0].dtype, device=new_labels[0].device)
-            attention_mask = torch.zeros((bs, max_len), dtype=attention_mask.dtype, device=attention_mask.device)
-            position_ids = torch.zeros((bs, max_len), dtype=position_ids.dtype, device=position_ids.device)
-
-            for i, (cur_new_embed, cur_new_labels) in enumerate(zip(new_input_embeds, new_labels)):
-                cur_len = cur_new_embed.shape[0]
-                if getattr(self.config, 'tokenizer_padding_side', 'right') == "left":
-                    new_input_embeds_padded.append(torch.cat((
-                        torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype, device=cur_new_embed.device),
-                        cur_new_embed
-                    ), dim=0))
-                    if cur_len > 0:
-                        new_labels_padded[i, -cur_len:] = cur_new_labels
-                        attention_mask[i, -cur_len:] = True
-                        position_ids[i, -cur_len:] = torch.arange(0, cur_len, dtype=position_ids.dtype, device=position_ids.device)
-                else:
-                    new_input_embeds_padded.append(torch.cat((
-                        cur_new_embed,
-                        torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype, device=cur_new_embed.device)
-                    ), dim=0))
-                    if cur_len > 0:
-                        new_labels_padded[i, :cur_len] = cur_new_labels
-                        attention_mask[i, :cur_len] = True
-                        position_ids[i, :cur_len] = torch.arange(0, cur_len, dtype=position_ids.dtype, device=position_ids.device)
-
-            new_input_embeds = torch.stack(new_input_embeds_padded, dim=0)
-
-            if _labels is None:
-                new_labels = None
-            else:
-                new_labels = new_labels_padded
-
-            if _attention_mask is None:
-                attention_mask = None
-            else:
-                attention_mask = attention_mask.to(dtype=_attention_mask.dtype)
-
-            if _position_ids is None:
-                position_ids = None
-
-            return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels, vision_tower_aux_feature_list_final, vision_tower_aux_attention_masks_list_final, final_size, global_context_feature_final
+        
 
     def initialize_vision_tokenizer(self, model_args, tokenizer):
         if model_args.mm_use_im_patch_token:
