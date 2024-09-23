@@ -1122,7 +1122,7 @@ class LazySupervisedDataset(Dataset):
 		except Exception as e:
 			raise e
 
-	def _getitem(self, i) -> Dict[str, torch.Tensor]:
+	def _get_item(self, i) -> Dict[str, torch.Tensor]:
 		#sources = self.list_data_dict[i]
 		with open(self.data_path, 'r') as file:
 			for idx, line in enumerate(file):
