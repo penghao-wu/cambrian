@@ -121,7 +121,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		# skip_layers = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
 		# skip_layers = [_ for _ in range(0, 32)]
 		skip_layers = [_ for _ in range(12, 24)]
-		skip_layers = []
+		# skip_layers = []
 		# skip_layers += [0, 1, 2, 3, 4, 5]
 
 		# skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
