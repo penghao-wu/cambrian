@@ -1423,7 +1423,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 
 			cur_labels_newline_full.append(torch.full((num_image_crops_padded,), IGNORE_INDEX, dtype=torch.long))
 
-		input_ids_text.append(cur_input_ids_text)
+		input_ids_text.append(torch.cat(cur_input_ids_text))
 
 		attention_mask_image_full.append(torch.cat(cur_attention_mask_image_full))
 		attention_mask_image_compress.append(torch.cat(cur_attention_mask_image_compress))
