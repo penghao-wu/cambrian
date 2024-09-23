@@ -1149,7 +1149,7 @@ class LazySupervisedDataset(Dataset):
 				image = [self.process_image(image_file)]
 
 			images = torch.cat([img[0] for img in image])
-			image2crops_nums = [img[3] for img in image]
+			image2crops_nums = [img[2] for img in image]
 			sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
 
 		elif "video" in sources[0]:
