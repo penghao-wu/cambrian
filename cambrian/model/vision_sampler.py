@@ -430,152 +430,24 @@ class VisionTokenSampler(nn.Module):
 
 
 
-from transformers.models.llama.modeling_llama import LlamaSdpaAttention, LlamaDecoderLayer, LlamaRMSNorm, rotate_half, repeat_kv
-class VisionMLP(nn.Module):
-	def __init__(self, config, intermediate_size=1024):
-		super().__init__()
-		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
-			nn.SiLU(),
-			nn.Linear(intermediate_size, config.hidden_size, bias=False)
-		)
-		# self.layernorm_pre = LlamaRMSNorm(intermediate_size*2, eps=config.rms_norm_eps)
-		self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-
-		self.layernorm_pre = nn.Identity()
-		# self.layernorm_post  = nn.Identity()
-
-	def forward(self, input_embed, context, side_len_input, side_len_context, attention_mask=None):
-		bs = input_embed.shape[0]
-		reduce_factor = side_len_input//side_len_context
-
-		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
-		context = context.view(bs, side_len_context, side_len_context+1, -1)
-
-		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
-		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
-
-		context_newline = context[:, :, -1:]
-		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
-
-		context = self.context_proj(context)
-		residual = input_embed
-		input_embed = self.input_proj(input_embed)
-		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
-		# input_embed = self.layernorm_pre(input_embed)
-		# input_embed = input_embed + context
-		input_embed = self.layernorm_post(self.proj(input_embed) + residual) 
-		
-		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
-
-		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
-
-		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
-
-		return input_embed
-
-
-class VisionMLP_sa(nn.Module):
-	def __init__(self, config, intermediate_size=1024):
-		super().__init__()
-		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size*2, config.hidden_size, bias=False),
-		)
-
-	def forward(self, input_embed, context, side_len_input, side_len_context, attention_mask=None):
-		bs = input_embed.shape[0]
-		reduce_factor = side_len_input//side_len_context
-
-		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
-		context = context.view(bs, side_len_context, side_len_context+1, -1)
-
-		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
-		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
-
-		context_newline = context[:, :, -1:]
-		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
-
-		context = self.context_proj(context)
-		input_embed = self.input_proj(input_embed)
-		input_embed = torch.cat([input_embed, context], -1)
-		input_embed = self.proj(input_embed) 
-		
-		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
-
-		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
-
-		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
-
-		return input_embed
-	
-
-class VisionMLP_ffn(nn.Module):
-	def __init__(self, config, intermediate_size=1024):
-		super().__init__()
-		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
-			nn.SiLU(),
-			nn.Linear(intermediate_size, config.hidden_size, bias=False)
-		)
-
-	def forward(self, input_embed, context, side_len_input, side_len_context, attention_mask=None):
-		bs = input_embed.shape[0]
-		reduce_factor = side_len_input//side_len_context
-
-		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
-		context = context.view(bs, side_len_context, side_len_context+1, -1)
-
-		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
-		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
-
-		context_newline = context[:, :, -1:]
-		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
-
-		context = self.context_proj(context)
-		input_embed = self.input_proj(input_embed)
-		input_embed = torch.cat([input_embed, context], -1)
-		input_embed = self.proj(input_embed) 
-		
-		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
-
-		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
-
-		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
-
-		return input_embed
-	
+# from transformers.models.llama.modeling_llama import LlamaSdpaAttention, LlamaDecoderLayer, LlamaRMSNorm, rotate_half, repeat_kv
 # class VisionMLP(nn.Module):
-# 	def __init__(self, config, intermediate_size=1024):
-# 		super().__init__()
-# 		# self.sa = VisionMLP_sa(config, intermediate_size)
-# 		self.sa = VisionSA(config, intermediate_size)
-# 		self.ffn = nn.Sequential(
-# 			nn.Linear(config.hidden_size, intermediate_size, bias=False),
-# 			nn.SiLU(),
-# 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
-# 		)
-# 		# self.ffn = VisionMLP_ffn(config, intermediate_size)
-
-# class VisionSA(nn.Module):
 # 	def __init__(self, config, intermediate_size=1024):
 # 		super().__init__()
 # 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 # 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 # 		self.proj = nn.Sequential(
-# 			nn.Linear(intermediate_size, intermediate_size, bias=False),
+# 			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
 # 			nn.SiLU(),
 # 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 # 		)
-# 		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16)
+# 		# self.layernorm_pre = LlamaRMSNorm(intermediate_size*2, eps=config.rms_norm_eps)
 # 		self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
-# 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
+# 		self.layernorm_pre = nn.Identity()
+# 		# self.layernorm_post  = nn.Identity()
+
+# 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_mask=None):
 # 		bs = input_embed.shape[0]
 # 		reduce_factor = side_len_input//side_len_context
 
@@ -583,27 +455,56 @@ class VisionMLP_ffn(nn.Module):
 # 		context = context.view(bs, side_len_context, side_len_context+1, -1)
 
 # 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
-# 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 2).flatten(1, 2)
+# 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
 
 # 		context_newline = context[:, :, -1:]
-# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
+# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
 
 # 		context = self.context_proj(context)
 # 		residual = input_embed
 # 		input_embed = self.input_proj(input_embed)
-		
-# 		if attention_masks is not None:
-# 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
-# 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
-
-# 		sa_kv = torch.cat([input_embed, context], dim=1)
-# 		input_embed = input_embed + self.self_attention(sa_kv, input_embed, attention_masks)
-
-# 		input_embed = self.proj(input_embed) + residual
+# 		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
+# 		# input_embed = self.layernorm_pre(input_embed)
+# 		# input_embed = input_embed + context
+# 		input_embed = self.layernorm_post(self.proj(input_embed) + residual) 
 		
 # 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
-# 		input_embed = self.layernorm_post(input_embed)
+# 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
+
+# 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
+
+# 		return input_embed
+
+
+# class VisionMLP_sa(nn.Module):
+# 	def __init__(self, config, intermediate_size=1024):
+# 		super().__init__()
+# 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		self.proj = nn.Sequential(
+# 			nn.Linear(intermediate_size*2, config.hidden_size, bias=False),
+# 		)
+
+# 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_mask=None):
+# 		bs = input_embed.shape[0]
+# 		reduce_factor = side_len_input//side_len_context
+
+# 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
+# 		context = context.view(bs, side_len_context, side_len_context+1, -1)
+
+# 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+# 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
+
+# 		context_newline = context[:, :, -1:]
+# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
+
+# 		context = self.context_proj(context)
+# 		input_embed = self.input_proj(input_embed)
+# 		input_embed = torch.cat([input_embed, context], -1)
+# 		input_embed = self.proj(input_embed) 
+		
+# 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
 # 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
 
@@ -612,82 +513,122 @@ class VisionMLP_ffn(nn.Module):
 # 		return input_embed
 	
 
-class VisionSA(nn.Module):
-	def __init__(self, config, intermediate_size=1024):
-		super().__init__()
-		# self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.context_proj = nn.Identity()
-		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		# self.cat_proj = nn.Linear(intermediate_size*2, intermediate_size, bias=False)
-		self.gate = nn.Sequential(nn.Linear(config.hidden_size, config.hidden_size, bias=False), nn.Sigmoid())
-		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16, config.hidden_size)
-		self.layernorm_pre = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-		# self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+# class VisionMLP_ffn(nn.Module):
+# 	def __init__(self, config, intermediate_size=1024):
+# 		super().__init__()
+# 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		self.proj = nn.Sequential(
+# 			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
+# 			nn.SiLU(),
+# 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
+# 		)
 
-	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
-		bs = input_embed.shape[0]
-		reduce_factor = side_len_input//side_len_context
+# 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_mask=None):
+# 		bs = input_embed.shape[0]
+# 		reduce_factor = side_len_input//side_len_context
+
+# 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
+# 		context = context.view(bs, side_len_context, side_len_context+1, -1)
+
+# 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+# 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(1, 4)
+
+# 		context_newline = context[:, :, -1:]
+# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
+
+# 		context = self.context_proj(context)
+# 		input_embed = self.input_proj(input_embed)
+# 		input_embed = torch.cat([input_embed, context], -1)
+# 		input_embed = self.proj(input_embed) 
 		
-		input_embed = self.layernorm_pre(input_embed)
+# 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
-		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
-		context = context.view(bs, side_len_context, side_len_context+1, -1)
+# 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
 
-		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+# 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
+
+# 		return input_embed
+	
+# # class VisionMLP(nn.Module):
+# # 	def __init__(self, config, intermediate_size=1024):
+# # 		super().__init__()
+# # 		# self.sa = VisionMLP_sa(config, intermediate_size)
+# # 		self.sa = VisionSA(config, intermediate_size)
+# # 		self.ffn = nn.Sequential(
+# # 			nn.Linear(config.hidden_size, intermediate_size, bias=False),
+# # 			nn.SiLU(),
+# # 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
+# # 		)
+# # 		# self.ffn = VisionMLP_ffn(config, intermediate_size)
+
+# # class VisionSA(nn.Module):
+# # 	def __init__(self, config, intermediate_size=1024):
+# # 		super().__init__()
+# # 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# # 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# # 		self.proj = nn.Sequential(
+# # 			nn.Linear(intermediate_size, intermediate_size, bias=False),
+# # 			nn.SiLU(),
+# # 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
+# # 		)
+# # 		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16)
+# # 		self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+
+# # 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
+# # 		bs = input_embed.shape[0]
+# # 		reduce_factor = side_len_input//side_len_context
+
+# # 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
+# # 		context = context.view(bs, side_len_context, side_len_context+1, -1)
+
+# # 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+# # 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 2).flatten(1, 2)
+
+# # 		context_newline = context[:, :, -1:]
+# # 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
+
+# # 		context = self.context_proj(context)
+# # 		residual = input_embed
+# # 		input_embed = self.input_proj(input_embed)
 		
-		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 2).flatten(1, 2)
-		residual = input_embed
+# # 		if attention_masks is not None:
+# # 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
+# # 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
 
-		context_newline = context[:, :, -1:]
-		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
-		# context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 2).flatten(1, 2)
+# # 		sa_kv = torch.cat([input_embed, context], dim=1)
+# # 		input_embed = input_embed + self.self_attention(sa_kv, input_embed, attention_masks)
 
-		context = self.context_proj(context)
-		input_embed = self.input_proj(input_embed)
-
-		# input_embed = torch.cat([context, input_embed], -1)
-		# input_embed = self.cat_proj(input_embed)
+# # 		input_embed = self.proj(input_embed) + residual
 		
-		if attention_masks is not None:
-			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
-			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
-		# attention_masks = attention_masks[:, :, :, :-1]
+# # 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
-		# sa_kv = torch.cat([input_embed, context], dim=1)
-		sa_kv = input_embed
-		# input_embed = self.self_attention(sa_kv, input_embed, attention_masks) + residual
-		input_embed = self.self_attention(sa_kv, input_embed, attention_masks)
-		gate_weight = self.gate(input_embed+context)
-		input_embed = gate_weight*input_embed + (1-gate_weight)*context
-		input_embed = input_embed + residual
+# # 		input_embed = self.layernorm_post(input_embed)
 
-		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
+# # 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
 
-		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
+# # 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
 
-		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
-
-		return input_embed
-
-
-
+# # 		return input_embed
+	
 
 # class VisionSA(nn.Module):
 # 	def __init__(self, config, intermediate_size=1024):
 # 		super().__init__()
 # 		# self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-# 		# self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		self.context_proj = nn.Identity()
+# 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 # 		# self.cat_proj = nn.Linear(intermediate_size*2, intermediate_size, bias=False)
-# 		self.self_attention = CrossAttention(config.hidden_size, config.hidden_size, intermediate_size, 16, config.hidden_size)
 # 		self.gate = nn.Sequential(nn.Linear(config.hidden_size, config.hidden_size, bias=False), nn.Sigmoid())
-# 		# self.layernorm_pre = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+# 		self.self_attention = CrossAttention(intermediate_size, intermediate_size, intermediate_size, 16, config.hidden_size)
+# 		self.layernorm_pre = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 # 		# self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
 # 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
 # 		bs = input_embed.shape[0]
 # 		reduce_factor = side_len_input//side_len_context
 		
-# 		input_embed = input_embed
+# 		input_embed = self.layernorm_pre(input_embed)
 
 # 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
 # 		context = context.view(bs, side_len_context, side_len_context+1, -1)
@@ -698,11 +639,11 @@ class VisionSA(nn.Module):
 # 		residual = input_embed
 
 # 		context_newline = context[:, :, -1:]
-# 		# context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
-# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 2).flatten(1, 2)
+# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
+# 		# context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 2).flatten(1, 2)
 
-# 		# context = self.context_proj(context)
-# 		# input_embed = self.input_proj(input_embed)
+# 		context = self.context_proj(context)
+# 		input_embed = self.input_proj(input_embed)
 
 # 		# input_embed = torch.cat([context, input_embed], -1)
 # 		# input_embed = self.cat_proj(input_embed)
@@ -710,13 +651,15 @@ class VisionSA(nn.Module):
 # 		if attention_masks is not None:
 # 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
 # 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
-# 		attention_masks = attention_masks[:, :, :, :-1]
+# 		# attention_masks = attention_masks[:, :, :, :-1]
 
 # 		# sa_kv = torch.cat([input_embed, context], dim=1)
 # 		sa_kv = input_embed
+# 		# input_embed = self.self_attention(sa_kv, input_embed, attention_masks) + residual
 # 		input_embed = self.self_attention(sa_kv, input_embed, attention_masks)
 # 		gate_weight = self.gate(input_embed+context)
 # 		input_embed = gate_weight*input_embed + (1-gate_weight)*context
+# 		input_embed = input_embed + residual
 
 # 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
@@ -726,280 +669,337 @@ class VisionSA(nn.Module):
 
 # 		return input_embed
 
-class CrossNorm(nn.Module):
-    def __init__(self, C, epsilon=1e-5, affine=False):
-        super(CrossNorm, self).__init__()
-        self.epsilon = epsilon
-        self.affine = affine
-        if self.affine:
-            self.gamma = nn.Parameter(torch.ones(1, 1, C))
-            # self.beta = nn.Parameter(torch.zeros(1, 1, C))
-        else:
-            self.gamma = None
-            self.beta = None
 
-    def forward(self, x, ref):
-        mean = ref.mean(dim=1, keepdim=True)
-        variance = ref.var(dim=1, unbiased=False, keepdim=True)
-        
-        x_normalized = (x - mean) / torch.sqrt(variance + self.epsilon)
-        
-        if self.affine:
-            x_normalized = x_normalized * self.gamma
-        
-        return x_normalized
 
-class VisionMLP_crossnorm(nn.Module):
-	def __init__(self, config, intermediate_size=1024):
-		super().__init__()
-		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
-			nn.SiLU(),
-			nn.Linear(intermediate_size, config.hidden_size, bias=False)
-		)
-		self.layernorm_pre = LlamaRMSNorm(intermediate_size*2, eps=config.rms_norm_eps)
-		self.cross_norm_post = CrossNorm(config.hidden_size)
-	def forward(self, input_embed, context, side_len_input, side_len_context):
-		bs = input_embed.shape[0]
-		reduce_factor = side_len_input//side_len_context
 
-		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
-		context = context.view(bs, side_len_context, side_len_context+1, -1)
+# # class VisionSA(nn.Module):
+# # 	def __init__(self, config, intermediate_size=1024):
+# # 		super().__init__()
+# # 		# self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# # 		# self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# # 		# self.cat_proj = nn.Linear(intermediate_size*2, intermediate_size, bias=False)
+# # 		self.self_attention = CrossAttention(config.hidden_size, config.hidden_size, intermediate_size, 16, config.hidden_size)
+# # 		self.gate = nn.Sequential(nn.Linear(config.hidden_size, config.hidden_size, bias=False), nn.Sigmoid())
+# # 		# self.layernorm_pre = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+# # 		# self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
-		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
-		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 4)
-
-		context_newline = context[:, :, -1:]
-		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
-
-		ref_for_norm = context
-		context = context.flatten(0, 1)
-
-		context = self.context_proj(context)
-		residual = input_embed
-		input_embed = self.input_proj(input_embed)
-		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
-		input_embed = self.proj(input_embed) + residual
-		input_embed = self.cross_norm_post(input_embed.view(bs, side_len_input*side_len_input, -1), ref_for_norm)
+# # 	def forward(self, input_embed, context, side_len_input, side_len_context, attention_masks=None):
+# # 		bs = input_embed.shape[0]
+# # 		reduce_factor = side_len_input//side_len_context
 		
-		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
+# # 		input_embed = input_embed
 
-		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
+# # 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
+# # 		context = context.view(bs, side_len_context, side_len_context+1, -1)
 
-		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
-
-		return input_embed
-
-
-def apply_rotary_pos_emb(q, k, cos, sin, position_ids_q, position_ids_k, unsqueeze_dim=1):
-	cos_q = cos[position_ids_q].unsqueeze(unsqueeze_dim)
-	sin_q = sin[position_ids_q].unsqueeze(unsqueeze_dim)
-	q_embed = (q * cos_q) + (rotate_half(q) * sin_q)
-	cos_k = cos[position_ids_k].unsqueeze(unsqueeze_dim)
-	sin_k = sin[position_ids_k].unsqueeze(unsqueeze_dim)
-	k_embed = (k * cos_k) + (rotate_half(k) * sin_k)
-	return q_embed, k_embed
-
-
-# Adapted from LlamaAttention.forward
-def LlamaSdpaAttention_forward(
-	self,
-	hidden_states,
-	kv_states,
-	attention_mask = None,
-	position_ids_q = None,
-	position_ids_kv = None,
-	past_key_value = None,
-	output_attentions = False,
-	use_cache= False,
-):
-
-	bsz, q_len, _ = hidden_states.size()
-	kv_seq_len = kv_states.shape[1]
-
-	query_states = self.q_proj(hidden_states)
-	key_states = self.k_proj(kv_states)
-	value_states = self.v_proj(kv_states)
-
-	query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-	key_states = key_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-	value_states = value_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-
-	cos, sin = self.rotary_emb(value_states, seq_len=max(q_len, kv_seq_len))
-
-	query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids_q, position_ids_kv)
-
-	key_states = repeat_kv(key_states, self.num_key_value_groups)
-	value_states = repeat_kv(value_states, self.num_key_value_groups)
-
-	if attention_mask is not None:
-		if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
-			raise ValueError(
-				f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
-			)
-
-	# SDPA with memory-efficient backend is currently (torch==2.1.2) bugged with non-contiguous inputs with custom attn_mask,
-	# Reference: https://github.com/pytorch/pytorch/issues/112577.
-	if query_states.device.type == "cuda" and attention_mask is not None:
-		query_states = query_states.contiguous()
-		key_states = key_states.contiguous()
-		value_states = value_states.contiguous()
-
-	attn_output = torch.nn.functional.scaled_dot_product_attention(
-		query_states,
-		key_states,
-		value_states,
-		attn_mask=attention_mask,
-		dropout_p=self.attention_dropout if self.training else 0.0,
-		# The q_len > 1 is necessary to match with AttentionMaskConverter.to_causal_4d that does not create a causal mask in case q_len == 1.
-		is_causal=self.is_causal and attention_mask is None and q_len > 1,
-	)
-
-	attn_output = attn_output.transpose(1, 2).contiguous()
-	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
-
-	attn_output = self.o_proj(attn_output)
-
-	return attn_output, None, past_key_value
-
-LlamaSdpaAttention.forward = LlamaSdpaAttention_forward
-
-def decoder_forward(
-	self,
-	hidden_states,
-	kv_states,
-	attention_mask = None,
-	position_ids_q = None,
-	position_ids_kv = None,
-	# vision_full = None, 
-	# vision_concise_index = None,
-	# image_token_len_per_side = None,
-	# image_token_len_per_side_concise = None,
-	# vision_full_attention_mask = None,
-	past_key_value = None,
-	output_attentions = False,
-	use_cache = False,
-	**kwargs,):
-		residual = hidden_states
-
-		hidden_states = self.input_layernorm(hidden_states)
-		kv_states = self.input_layernorm(kv_states)
-
-		# Cross Attention
-		hidden_states, self_attn_weights, present_key_value = self.self_attn(
-			hidden_states=hidden_states,
-			kv_states = kv_states,
-			attention_mask=attention_mask,
-			position_ids_q=position_ids_q,
-			position_ids_kv=position_ids_kv,
-			past_key_value=past_key_value,
-			output_attentions=output_attentions,
-			use_cache=use_cache,
-			**kwargs,
-		)
-		hidden_states = residual + hidden_states
-
-		# if vision_full is not None:
-		# 	vision_concise = hidden_states[:, vision_concise_index[0]:vision_concise_index[1]]
-		# 	vision_full = self.vision_sampler_layers(vision_full, vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
-		# 	hidden_states = torch.cat([hidden_states, vision_full], 1)
-
-		# Fully Connected
-		residual = hidden_states
-		hidden_states = self.post_attention_layernorm(hidden_states)
-		hidden_states = self.mlp(hidden_states)
-		hidden_states = residual + hidden_states
-
-		outputs = (hidden_states,)
-
-		if output_attentions:
-			outputs += (self_attn_weights,)
-
-		if use_cache:
-			outputs += (present_key_value,)
-
-		return outputs
-
-
-def decoder_forward_vision(
-	self,
-	hidden_states_sys,
-	hidden_states_vision_concise,
-	hidden_states_vision_full,
-	hidden_states_text,
-	attention_mask = None,
-	position_ids_sys = None,
-	position_ids_vision_concise = None,
-	position_ids_vision_full = None,
-	position_ids_vision_text = None,
-	image_token_len_per_side = None,
-	image_token_len_per_side_concise = None,
-	vision_full_attention_mask = None,
-	past_key_value = None,
-	output_attentions = False,
-	use_cache = False,
-	**kwargs,):
-		len_sys = hidden_states_sys.shape[1]
-		len_vision_concise = hidden_states_vision_concise.shape[1]
-		len_vision_full = hidden_states_vision_full.shape[1]
-		len_text = hidden_states_text.shape[1]
-
-		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-		residual = hidden_states
-
-		hidden_states = self.input_layernorm(hidden_states)
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(hidden_states, [len_sys, len_vision_concise, len_vision_full, len_text], 1)
-
-		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
-		kv_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-		position_ids_q = torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1)
-		position_ids_kv = torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1)
-
-		# Cross Attention
-		q_states, self_attn_weights, present_key_value = self.self_attn(
-			hidden_states=q_states,
-			kv_states = kv_states,
-			attention_mask=attention_mask,
-			position_ids_q=position_ids_q,
-			position_ids_kv=position_ids_kv,
-			past_key_value=past_key_value,
-			output_attentions=output_attentions,
-			use_cache=use_cache,
-			**kwargs,
-		)
-
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
-		hidden_states_vision_full = self.vision_sampler_layers.sa(hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
-
-		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-		hidden_states = residual + hidden_states
-
-		# Fully Connected
-		residual = hidden_states
-		hidden_states = self.post_attention_layernorm(hidden_states)
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(hidden_states, [len_sys, len_vision_concise, len_vision_full, len_text], 1)
-
-
-		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
-		q_states = self.mlp(q_states)
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
-		hidden_states_vision_full = self.vision_sampler_layers.ffn(hidden_states_vision_full)
+# # 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
 		
-		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
+# # 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 2).flatten(1, 2)
+# # 		residual = input_embed
 
-		hidden_states = residual + hidden_states
+# # 		context_newline = context[:, :, -1:]
+# # 		# context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, 1, 1, 1).flatten(0, 2).flatten(1, 2)
+# # 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(0, 2).flatten(1, 2)
 
-		outputs = (hidden_states,)
+# # 		# context = self.context_proj(context)
+# # 		# input_embed = self.input_proj(input_embed)
 
-		if output_attentions:
-			outputs += (self_attn_weights,)
+# # 		# input_embed = torch.cat([context, input_embed], -1)
+# # 		# input_embed = self.cat_proj(input_embed)
+		
+# # 		if attention_masks is not None:
+# # 			attention_masks = attention_masks.view(bs*side_len_context*side_len_context, 1, 1, -1)
+# # 			attention_masks = attention_masks.repeat(1, 1, reduce_factor*reduce_factor, 1)
+# # 		attention_masks = attention_masks[:, :, :, :-1]
 
-		if use_cache:
-			outputs += (present_key_value,)
+# # 		# sa_kv = torch.cat([input_embed, context], dim=1)
+# # 		sa_kv = input_embed
+# # 		input_embed = self.self_attention(sa_kv, input_embed, attention_masks)
+# # 		gate_weight = self.gate(input_embed+context)
+# # 		input_embed = gate_weight*input_embed + (1-gate_weight)*context
 
-		return outputs
+# # 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
 
-LlamaDecoderLayer.forward = decoder_forward
-# LlamaDecoderLayer.forward_vision = decoder_forward_vision
+# # 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
+
+# # 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
+
+# # 		return input_embed
+
+# class CrossNorm(nn.Module):
+#     def __init__(self, C, epsilon=1e-5, affine=False):
+#         super(CrossNorm, self).__init__()
+#         self.epsilon = epsilon
+#         self.affine = affine
+#         if self.affine:
+#             self.gamma = nn.Parameter(torch.ones(1, 1, C))
+#             # self.beta = nn.Parameter(torch.zeros(1, 1, C))
+#         else:
+#             self.gamma = None
+#             self.beta = None
+
+#     def forward(self, x, ref):
+#         mean = ref.mean(dim=1, keepdim=True)
+#         variance = ref.var(dim=1, unbiased=False, keepdim=True)
+        
+#         x_normalized = (x - mean) / torch.sqrt(variance + self.epsilon)
+        
+#         if self.affine:
+#             x_normalized = x_normalized * self.gamma
+        
+#         return x_normalized
+
+# class VisionMLP_crossnorm(nn.Module):
+# 	def __init__(self, config, intermediate_size=1024):
+# 		super().__init__()
+# 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+# 		self.proj = nn.Sequential(
+# 			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
+# 			nn.SiLU(),
+# 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
+# 		)
+# 		self.layernorm_pre = LlamaRMSNorm(intermediate_size*2, eps=config.rms_norm_eps)
+# 		self.cross_norm_post = CrossNorm(config.hidden_size)
+# 	def forward(self, input_embed, context, side_len_input, side_len_context):
+# 		bs = input_embed.shape[0]
+# 		reduce_factor = side_len_input//side_len_context
+
+# 		input_embed = input_embed.view(bs, side_len_input, side_len_input+1, -1)
+# 		context = context.view(bs, side_len_context, side_len_context+1, -1)
+
+# 		input_embed = input_embed[:, :, :-1].view(bs, side_len_input, side_len_input, -1)
+# 		input_embed = input_embed.view(bs, side_len_context, reduce_factor, side_len_context, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().flatten(0, 4)
+
+# 		context_newline = context[:, :, -1:]
+# 		context = context[:, :, :-1].view(bs, side_len_context, side_len_context, 1, 1, -1).repeat(1, 1, 1, reduce_factor, reduce_factor, 1).flatten(1, 4)
+
+# 		ref_for_norm = context
+# 		context = context.flatten(0, 1)
+
+# 		context = self.context_proj(context)
+# 		residual = input_embed
+# 		input_embed = self.input_proj(input_embed)
+# 		input_embed = self.layernorm_pre(torch.cat([input_embed, context], -1))
+# 		input_embed = self.proj(input_embed) + residual
+# 		input_embed = self.cross_norm_post(input_embed.view(bs, side_len_input*side_len_input, -1), ref_for_norm)
+		
+# 		input_embed = input_embed.view(bs, side_len_context, side_len_context, reduce_factor, reduce_factor, -1).permute(0, 1, 3, 2, 4, 5).contiguous().view(bs, side_len_input, side_len_input, -1)
+
+# 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
+
+# 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
+
+# 		return input_embed
+
+
+# def apply_rotary_pos_emb(q, k, cos, sin, position_ids_q, position_ids_k, unsqueeze_dim=1):
+# 	cos_q = cos[position_ids_q].unsqueeze(unsqueeze_dim)
+# 	sin_q = sin[position_ids_q].unsqueeze(unsqueeze_dim)
+# 	q_embed = (q * cos_q) + (rotate_half(q) * sin_q)
+# 	cos_k = cos[position_ids_k].unsqueeze(unsqueeze_dim)
+# 	sin_k = sin[position_ids_k].unsqueeze(unsqueeze_dim)
+# 	k_embed = (k * cos_k) + (rotate_half(k) * sin_k)
+# 	return q_embed, k_embed
+
+
+# # Adapted from LlamaAttention.forward
+# def LlamaSdpaAttention_forward(
+# 	self,
+# 	hidden_states,
+# 	kv_states,
+# 	attention_mask = None,
+# 	position_ids_q = None,
+# 	position_ids_kv = None,
+# 	past_key_value = None,
+# 	output_attentions = False,
+# 	use_cache= False,
+# ):
+
+# 	bsz, q_len, _ = hidden_states.size()
+# 	kv_seq_len = kv_states.shape[1]
+
+# 	query_states = self.q_proj(hidden_states)
+# 	key_states = self.k_proj(kv_states)
+# 	value_states = self.v_proj(kv_states)
+
+# 	query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+# 	key_states = key_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+# 	value_states = value_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+
+# 	cos, sin = self.rotary_emb(value_states, seq_len=max(q_len, kv_seq_len))
+
+# 	query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids_q, position_ids_kv)
+
+# 	key_states = repeat_kv(key_states, self.num_key_value_groups)
+# 	value_states = repeat_kv(value_states, self.num_key_value_groups)
+
+# 	if attention_mask is not None:
+# 		if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
+# 			raise ValueError(
+# 				f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
+# 			)
+
+# 	# SDPA with memory-efficient backend is currently (torch==2.1.2) bugged with non-contiguous inputs with custom attn_mask,
+# 	# Reference: https://github.com/pytorch/pytorch/issues/112577.
+# 	if query_states.device.type == "cuda" and attention_mask is not None:
+# 		query_states = query_states.contiguous()
+# 		key_states = key_states.contiguous()
+# 		value_states = value_states.contiguous()
+
+# 	attn_output = torch.nn.functional.scaled_dot_product_attention(
+# 		query_states,
+# 		key_states,
+# 		value_states,
+# 		attn_mask=attention_mask,
+# 		dropout_p=self.attention_dropout if self.training else 0.0,
+# 		# The q_len > 1 is necessary to match with AttentionMaskConverter.to_causal_4d that does not create a causal mask in case q_len == 1.
+# 		is_causal=self.is_causal and attention_mask is None and q_len > 1,
+# 	)
+
+# 	attn_output = attn_output.transpose(1, 2).contiguous()
+# 	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
+
+# 	attn_output = self.o_proj(attn_output)
+
+# 	return attn_output, None, past_key_value
+
+# LlamaSdpaAttention.forward = LlamaSdpaAttention_forward
+
+# def decoder_forward(
+# 	self,
+# 	hidden_states,
+# 	kv_states,
+# 	attention_mask = None,
+# 	position_ids_q = None,
+# 	position_ids_kv = None,
+# 	# vision_full = None, 
+# 	# vision_concise_index = None,
+# 	# image_token_len_per_side = None,
+# 	# image_token_len_per_side_concise = None,
+# 	# vision_full_attention_mask = None,
+# 	past_key_value = None,
+# 	output_attentions = False,
+# 	use_cache = False,
+# 	**kwargs,):
+# 		residual = hidden_states
+
+# 		hidden_states = self.input_layernorm(hidden_states)
+# 		kv_states = self.input_layernorm(kv_states)
+
+# 		# Cross Attention
+# 		hidden_states, self_attn_weights, present_key_value = self.self_attn(
+# 			hidden_states=hidden_states,
+# 			kv_states = kv_states,
+# 			attention_mask=attention_mask,
+# 			position_ids_q=position_ids_q,
+# 			position_ids_kv=position_ids_kv,
+# 			past_key_value=past_key_value,
+# 			output_attentions=output_attentions,
+# 			use_cache=use_cache,
+# 			**kwargs,
+# 		)
+# 		hidden_states = residual + hidden_states
+
+# 		# if vision_full is not None:
+# 		# 	vision_concise = hidden_states[:, vision_concise_index[0]:vision_concise_index[1]]
+# 		# 	vision_full = self.vision_sampler_layers(vision_full, vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+# 		# 	hidden_states = torch.cat([hidden_states, vision_full], 1)
+
+# 		# Fully Connected
+# 		residual = hidden_states
+# 		hidden_states = self.post_attention_layernorm(hidden_states)
+# 		hidden_states = self.mlp(hidden_states)
+# 		hidden_states = residual + hidden_states
+
+# 		outputs = (hidden_states,)
+
+# 		if output_attentions:
+# 			outputs += (self_attn_weights,)
+
+# 		if use_cache:
+# 			outputs += (present_key_value,)
+
+# 		return outputs
+
+
+# def decoder_forward_vision(
+# 	self,
+# 	hidden_states_sys,
+# 	hidden_states_vision_concise,
+# 	hidden_states_vision_full,
+# 	hidden_states_text,
+# 	attention_mask = None,
+# 	position_ids_sys = None,
+# 	position_ids_vision_concise = None,
+# 	position_ids_vision_full = None,
+# 	position_ids_vision_text = None,
+# 	image_token_len_per_side = None,
+# 	image_token_len_per_side_concise = None,
+# 	vision_full_attention_mask = None,
+# 	past_key_value = None,
+# 	output_attentions = False,
+# 	use_cache = False,
+# 	**kwargs,):
+# 		len_sys = hidden_states_sys.shape[1]
+# 		len_vision_concise = hidden_states_vision_concise.shape[1]
+# 		len_vision_full = hidden_states_vision_full.shape[1]
+# 		len_text = hidden_states_text.shape[1]
+
+# 		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
+# 		residual = hidden_states
+
+# 		hidden_states = self.input_layernorm(hidden_states)
+# 		hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(hidden_states, [len_sys, len_vision_concise, len_vision_full, len_text], 1)
+
+# 		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
+# 		kv_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
+# 		position_ids_q = torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1)
+# 		position_ids_kv = torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1)
+
+# 		# Cross Attention
+# 		q_states, self_attn_weights, present_key_value = self.self_attn(
+# 			hidden_states=q_states,
+# 			kv_states = kv_states,
+# 			attention_mask=attention_mask,
+# 			position_ids_q=position_ids_q,
+# 			position_ids_kv=position_ids_kv,
+# 			past_key_value=past_key_value,
+# 			output_attentions=output_attentions,
+# 			use_cache=use_cache,
+# 			**kwargs,
+# 		)
+
+# 		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
+# 		hidden_states_vision_full = self.vision_sampler_layers.sa(hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+
+# 		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
+# 		hidden_states = residual + hidden_states
+
+# 		# Fully Connected
+# 		residual = hidden_states
+# 		hidden_states = self.post_attention_layernorm(hidden_states)
+# 		hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(hidden_states, [len_sys, len_vision_concise, len_vision_full, len_text], 1)
+
+
+# 		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
+# 		q_states = self.mlp(q_states)
+# 		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
+# 		hidden_states_vision_full = self.vision_sampler_layers.ffn(hidden_states_vision_full)
+		
+# 		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
+
+# 		hidden_states = residual + hidden_states
+
+# 		outputs = (hidden_states,)
+
+# 		if output_attentions:
+# 			outputs += (self_attn_weights,)
+
+# 		if use_cache:
+# 			outputs += (present_key_value,)
+
+# 		return outputs
+
+# LlamaDecoderLayer.forward = decoder_forward
+# # LlamaDecoderLayer.forward_vision = decoder_forward_vision
