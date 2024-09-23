@@ -198,6 +198,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				hidden_states_sys = layer_outputs[0][:, :vision_token_start_idx]
 				hidden_states_vision_full = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]
 
+				hidden_states = layer_outputs[0]
 				# if (i+1) in skip_layers:
 				# 	bs = hidden_states_vision_full.shape[0]
 				# 	image_features_full_with_newline = hidden_states_vision_full.clone()
@@ -218,18 +219,18 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				# 	hidden_states_vision_concise = image_features_concise_with_newline
 		
 
-		hidden_states_text = self.norm(hidden_states_text)
+		hidden_states = self.norm(hidden_states)
 
 		# add hidden states from the last decoder layer
 		if output_hidden_states:
-			all_hidden_states += (hidden_states_text,)
+			all_hidden_states += (hidden_states,)
 
 		next_cache = None
 
 		if not return_dict:
-			return tuple(v for v in [hidden_states_text, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
+			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
 		return BaseModelOutputWithPast(
-			last_hidden_state=hidden_states_text,
+			last_hidden_state=hidden_states,
 			past_key_values=next_cache,
 			hidden_states=all_hidden_states,
 			attentions=all_self_attns,
