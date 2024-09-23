@@ -149,7 +149,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						past_key_values,
 						output_attentions,
 						use_cache,
-						fast_vision=True,
+						True,
 					)
 				else:
 					layer_outputs = decoder_layer(
@@ -165,7 +165,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						past_key_values,
 						output_attentions,
 						use_cache,
-						fast_vision=True,
+						True,
 					)
 				hidden_states_vision_concise = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]
 				# hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:]
@@ -196,7 +196,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						past_key_values,
 						output_attentions,
 						use_cache,
-						fast_vision=False,
+						False,
 					)
 				else:
 					layer_outputs = decoder_layer(
@@ -571,11 +571,6 @@ def decoder_forward(
 	attention_mask = None,
 	position_ids_q = None,
 	position_ids_kv = None,
-	# vision_full = None, 
-	# vision_concise_index = None,
-	# image_token_len_per_side = None,
-	# image_token_len_per_side_concise = None,
-	# vision_full_attention_mask = None,
 	past_key_value = None,
 	output_attentions = False,
 	use_cache = False,
