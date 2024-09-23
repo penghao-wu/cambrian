@@ -24,6 +24,7 @@ import json
 import logging
 import pathlib
 from typing import Dict, Optional, Sequence, List
+import time
 
 import numpy as np
 import numpy as np
@@ -42,8 +43,8 @@ from cambrian.train.cambrian_trainer import CambrianTrainer
 
 from cambrian import conversation as conversation_lib
 
-from cambrian.utils import IS_XLA_AVAILABLE
-from cambrian.mm_utils import tokenizer_image_token, tokenizer_image_token_llama3
+from cambrian.utils import IS_XLA_AVAILABLE, process_video_with_decord
+from cambrian.mm_utils import tokenizer_image_token, tokenizer_image_token_llama3, process_anyres_image
 from cambrian.train.wandb_nan_alert_callback import NanInfAlertWandbCallback
 from cambrian.model import CambrianLlamaForCausalLM, CambrianMistralForCausalLM, CambrianQwenForCausalLM
 from cambrian.model.language_model.cambrian_phi3 import CambrianPhi3ForCausalLM
@@ -1040,10 +1041,81 @@ class LazySupervisedDataset(Dataset):
 
 	def _has_image(self, sample: dict) -> bool:
 		return "image" in sample and not str(sample['image']) in ['', 'None', 'none', 'nan']
+	
+	def process_image(self, image_file, overwrite_image_aspect_ratio=None):
+		image_folder = self.data_args.image_folder
+		processor_aux_list = self.data_args.image_processor_aux_list
+		processor = processor_aux_list[0]
+		# print(f"\n\nInspecting the image path, folder = {image_folder}, image={image_file}\n\n")
+		try:
+			image = Image.open(os.path.join(image_folder, image_file)).convert("RGB")
+		except Exception as exn:
+			print(f"Failed to open image {image_file}. Exception:", exn)
+			raise exn
+		image_size = image.size
+		image_aspect_ratio = self.data_args.image_aspect_ratio
+		if overwrite_image_aspect_ratio is not None:
+			image_aspect_ratio = overwrite_image_aspect_ratio
+		if image_aspect_ratio not in ['pad', 'anyres']:
+			raise NotImplementedError("Only pad and anyres is supported for now.")
 
+		image2crops_num = 1
+		if image_aspect_ratio == "anyres":
+			image = process_anyres_image(image, processor, self.data_args.image_grid_pinpoints)
+			image2crops_num = image.shape[0]
+		elif image_aspect_ratio == "pad":
+			def expand2square(pil_img, background_color):
+				width, height = pil_img.size
+				if width == height:
+					return pil_img
+				elif width > height:
+					result = Image.new(pil_img.mode, (width, width), background_color)
+					result.paste(pil_img, (0, (width - height) // 2))
+					return result
+				else:
+					result = Image.new(pil_img.mode, (height, height), background_color)
+					result.paste(pil_img, ((height - width) // 2, 0))
+					return result
+			image = expand2square(image, tuple(int(x * 255) for x in processor.image_mean))
+			image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
+			image = image.unsqueeze(0)
+		return image, image_size, image2crops_num
+	
 	def __getitem__(self, i) -> Dict[str, torch.Tensor]:
-		#sources = self.list_data_dict[i]
+		# TODO: define number of retries somewhere else
+		num_base_retries = 3
+		num_final_retries = 300
 
+		# try the current sample first
+		for attempt_idx in range(num_base_retries):
+			try:
+				sample = self._get_item(i)
+				return sample
+			except Exception as e:
+				# sleep 1s in case it is a cloud disk issue
+				print(f"[Try #{attempt_idx}] Failed to fetch sample {i}. Exception:", e)
+				time.sleep(1)
+
+		# try other samples, in case it is file corruption issue
+		for attempt_idx in range(num_base_retries):
+			try:
+				next_index = min(i + 1, len(self.lengths) - 1)
+				# sample_idx = random.choice(range(len(self)))
+				sample = self._get_item(next_index)
+				return sample
+			except Exception as e:
+				# no need to sleep
+				print(f"[Try other #{attempt_idx}] Failed to fetch sample {next_index}. Exception:", e)
+				pass
+
+		try:
+			sample = self._get_item(i)
+			return sample
+		except Exception as e:
+			raise e
+
+	def _getitem(self, i) -> Dict[str, torch.Tensor]:
+		#sources = self.list_data_dict[i]
 		with open(self.data_path, 'r') as file:
 			for idx, line in enumerate(file):
 				if idx == i:
@@ -1054,40 +1126,79 @@ class LazySupervisedDataset(Dataset):
 			sources = [sources]
 		assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
 		has_image = self._has_image(dat)
+
+		images = []
+		# for a anyres image, we treat each crop as a single image and we need to repeat the <image>, so we record this value here
+		image2crops_nums = []
 		if has_image:
 			image_file = dat['image']
-			image_folder = self.data_args.image_folder
-			processor_aux_list = self.data_args.image_processor_aux_list
-			try:
-				image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
-			except:
-				return self.__getitem__(0)
-			image_size = image.size
-			def expand2square(pil_img, background_color):
-				width, height = pil_img.size
-				if width == height:
-					return pil_img
-				elif width > height:
-					result = Image.new(pil_img.mode, (width, width), background_color)
-					result.paste(pil_img, (0, (width - height) // 2))
-					# result.paste(pil_img, (0, 0))
-					return result
+			if type(image_file) is list:
+				if len(image_file) > 1:
+					image = [self.process_image(f, "pad") for f in image_file]
 				else:
-					result = Image.new(pil_img.mode, (height, height), background_color)
-					result.paste(pil_img, ((height - width) // 2, 0))
-					# result.paste(pil_img, (0, 0))
-					return result
-			if self.data_args.image_aspect_ratio != 'pad':
-				raise NotImplementedError("Only pad is supported for now.")
-			
-			image_aux_list = []
-			for processor_aux in processor_aux_list:
-				image_aux = image
-				target_resolution = processor_aux.crop_size['height']
-				image_aux =  expand2square(image_aux, tuple(int(x*255) for x in processor_aux.image_mean)).resize((target_resolution, target_resolution))
-				image_aux = processor_aux.preprocess(image_aux, return_tensors='pt')['pixel_values'][0]
-				image_aux_list.append(image_aux)
+					image = [self.process_image(f) for f in image_file]
+			else:
+				image = [self.process_image(image_file)]
 
+			images = torch.cat([img[0] for img in image])
+			image2crops_nums = [img[3] for img in image]
+			sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
+
+		elif "video" in sources[0]:
+			video_file = dat["video"]
+			video_folder = self.data_args.video_folder
+			video_file = os.path.join(video_folder, video_file)
+			suffix = video_file.split(".")[-1]
+			if not os.path.exists(video_file):
+				print("File {} not exist!".format(video_file))
+
+			try:
+				if "shareVideoGPTV" in video_file:
+					frame_files = [os.path.join(video_file, f) for f in os.listdir(video_file) if os.path.isfile(os.path.join(video_file, f))]
+					frame_files.sort()  # Ensure the frames are sorted if they are named sequentially
+
+					# TODO: Hard CODE: Determine the indices for uniformly sampling 10 frames
+					if self.data_args.force_sample:
+						num_frames_to_sample = self.data_args.frames_upbound
+					else:
+						num_frames_to_sample = 10
+
+					avg_fps = 2
+					
+					total_frames = len(frame_files)
+					sampled_indices = np.linspace(0, total_frames - 1, num_frames_to_sample, dtype=int)
+
+
+					frame_time = [i/2 for i in sampled_indices]
+					frame_time = ",".join([f"{i:.2f}s" for i in frame_time])
+
+					video_time = total_frames / avg_fps
+
+					# Read and store the sampled frames
+					video = []
+					for idx in sampled_indices:
+						frame_path = frame_files[idx]
+						try:
+							with Image.open(frame_path) as img:
+								frame = img.convert("RGB")
+								video.append(frame)
+						except IOError:
+							print(f"Failed to read frame at path: {frame_path}")
+				else:
+					video, video_time, frame_time, num_frames_to_sample = process_video_with_decord(video_file, self.data_args)
+
+				processor = self.data_args.image_processor
+				image = processor.preprocess(video, return_tensors="pt")["pixel_values"]
+				if self.data_args.add_time_instruction:
+					time_instruciton = f"The video lasts for {video_time:.2f} seconds, and {num_frames_to_sample} frames are uniformly sampled from it. These frames are located at {frame_time}.Please answer the following questions related to this video."
+					sources[0]["conversations"][0]["value"] = f'{DEFAULT_IMAGE_TOKEN}\n{time_instruciton}\n{sources[0]["conversations"][0]["value"].replace(DEFAULT_IMAGE_TOKEN, "")}'
+				image = [(image, video[0].size, "video")]
+				sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
+				# print(sources)
+			except Exception as e:
+				print(f"Error: {e}")
+				print(f"Failed to read video file: {video_file}")
+				return self._get_item(i + 1)
 			sources = preprocess_multimodal(
 				copy.deepcopy([e["conversations"] for e in sources]),
 				self.data_args)
@@ -1114,64 +1225,67 @@ class LazySupervisedDataset(Dataset):
 		data_dict['image_size'] = image_size
 		return data_dict
 
-def get_padding_offset(cur_size, original_size):
-	cur_w, cur_h = cur_size
-	original_w, original_h = original_size
+def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, dummy_num=1):
+	height = width = per_crop_token_len
+	height_compress = width_compress = per_crop_token_len // compress_reduce_factor
 
-	original_aspect_ratio = original_w / original_h
-	current_aspect_ratio = cur_w / cur_h
+	if is_dummy:
+		attention_mask_image_full = torch.zeros((dummy_num*(height*width),), dtype=torch.bool)
+		attention_mask_newline_full = torch.zeros((dummy_num,), dtype=torch.bool)
+		position_ids_image_full = torch.zeros((dummy_num*(height*width),), dtype=torch.long)
+		position_ids_newline_full = torch.zeros((dummy_num,), dtype=torch.long)
 
-	if original_aspect_ratio > current_aspect_ratio:
-		scale_factor = cur_w / original_w
-		new_height = int(np.ceil(original_h * scale_factor))
-		padding = (cur_h - new_height) // 2
-		return 0, 0, padding, padding
+		attention_mask_image_compress = torch.zeros((dummy_num*height_compress*width_compress,), dtype=torch.bool)
+		attention_mask_newline_compress = torch.zeros((dummy_num,), dtype=torch.bool)
+		position_ids_image_compress = torch.zeros((dummy_num*height_compress*width_compress,), dtype=torch.long)
+		position_ids_newline_compress = torch.zeros((dummy_num,), dtype=torch.long)
 	else:
-		scale_factor = cur_h / original_h
-		new_width = int(np.ceil(original_w * scale_factor))
-		padding = (cur_w - new_width) // 2
-		return padding, padding, 0, 0
+		attention_mask_image_full_withnewline = torch.ones((height * width+1, 1), dtype=torch.bool)
+		position_ids_image_full_withnewline = attention_mask_image_full_withnewline.cumsum(0)-1
 
-def prepare_image_info(image_size, image_token_len, newline=False):
-	num_tokens_per_side = int(image_token_len**0.5)
-	if newline:
-		# for the newline embedding
-		attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side+1, dtype=torch.bool)
-	else:
-		attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side, dtype=torch.bool)
-	left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((num_tokens_per_side, num_tokens_per_side), image_size)
-	if newline:
-		if left_offset > 0:
-			attention_mask[:, :left_offset] = 0
-		if right_offset > 0:
-			attention_mask[:, -right_offset-1:-1] = 0
-		if top_offset > 0:
-			attention_mask[:top_offset, :]=0
-		if bottom_offset > 0:
-			attention_mask[-bottom_offset:, :] = 0
-	else:
-		if left_offset > 0:
-			attention_mask[:, :left_offset] = 0
-		if right_offset > 0:
-			attention_mask[:, -right_offset:] = 0
-		if top_offset > 0:
-			attention_mask[:top_offset, :]=0
-		if bottom_offset > 0:
-			attention_mask[-bottom_offset:, :] = 0
-	attention_mask = attention_mask.flatten()
-	position_ids = attention_mask.cumsum(0)-1
-	return attention_mask, position_ids
+		attention_mask_image_full = attention_mask_image_full_withnewline[:-1]
+		attention_mask_newline_full = attention_mask_image_full_withnewline[-1:]
+		position_ids_image_full = position_ids_image_full_withnewline[:-1]
+		position_ids_newline_full = position_ids_image_full_withnewline[-1:]
 
-def combine_causal_attention_mask(seq_len, attention_mask, dtype=torch.bfloat16):
-	causal_mask = torch.full((1, seq_len, seq_len), fill_value=1)
+		attention_mask_image_compress_withnewline = torch.ones((height * width+1, 1), dtype=torch.bool)
+		position_ids_image_compress_withnewline = attention_mask_image_compress_withnewline.cumsum(0)-1
+
+		attention_mask_image_compress = attention_mask_image_compress_withnewline[:-1]
+		attention_mask_newline_compress = attention_mask_image_compress_withnewline[-1:]
+		position_ids_image_compress = position_ids_image_compress_withnewline[:-1]
+		position_ids_newline_compress = position_ids_image_compress_withnewline[-1:]
+	
+	image_info = {}
+	image_info['attention_mask_image_full'] = attention_mask_image_full
+	image_info['attention_mask_newline_full'] = attention_mask_newline_full
+	image_info['attention_mask_image_compress'] = attention_mask_image_compress
+	image_info['attention_mask_newline_compress'] = attention_mask_newline_compress
+
+	image_info['position_ids_image_full'] = position_ids_image_full
+	image_info['position_ids_newline_full'] = position_ids_newline_full
+	image_info['position_ids_image_compress'] = position_ids_image_compress
+	image_info['position_ids_newline_compress'] = position_ids_newline_compress
+	
+	return image_info
+
+def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.bfloat16):
 	min_dtype = torch.finfo(dtype).min
-	causal_mask = torch.triu(causal_mask, diagonal=1).to(dtype=dtype)*min_dtype
-	padding_mask = causal_mask.eq(0.0) * attention_mask[None, None, :].eq(0.0)
-	causal_mask = causal_mask.masked_fill(padding_mask, min_dtype)
+	bs = position_ids_q.shape[0]
+	position_ids_q = position_ids_q.view(bs, -1, 1)
+	position_ids_kv = position_ids_kv.view(bs, -1, 1)
+	causal_mask = position_ids_q >= position_ids_kv.transpose(1, 2)
+	causal_mask = causal_mask.to(dtype).view(bs, 1, position_ids_q.shape[1], position_ids_kv.shape[1])
+	attention_mask_4d = attention_mask_kv.view(bs, 1, 1, -1).repeat(1, 1, position_ids_q.shape[1], 1)
+
+	causal_mask = causal_mask.masked_fill(causal_mask == 0, min_dtype)
+	causal_mask = causal_mask.masked_fill(causal_mask == 1, 0.0)
+	causal_mask = causal_mask.masked_fill(attention_mask_4d == 0, min_dtype)
+
 	return causal_mask
 	
 
-def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, max_num_image_crops, per_crop_token_len, compress_reduce_factor, image_aux_token_len_list=[24*24], max_length=2048):
+def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, image_aux_token_len_list=[24*24], max_length=2048, pad_token_id=0):
 
 	input_ids_text = []
 
@@ -1187,18 +1301,36 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, max_
 	position_ids_newline_compress = []
 	position_ids_text = []
 
+	# Note that the labels here will already be shifted by 1
 	labels_image_full = []
-	labels_image_compress = []
 	labels_newline_full = []
-	labels_newline_compress = []
 	labels_text = []
 
 	for batch_idx, cur_input_ids in enumerate(input_ids):
+		cur_attention_mask = attention_mask[batch_idx]
+		cur_labels = labels[batch_idx]
 		num_image_crops = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
-		if num_image_crops < max_num_image_crops:
-			num_image_crops_padded = max_num_image_crops - num_image_crops
+		if num_image_crops == 0:
+			input_ids_text.append(cur_input_ids)
+
+			attention_mask_image_full.append(torch.zeros((max_num_image_crops*per_crop_token_len,), dtype=torch.bool))
+			attention_mask_image_compress.append(torch.zeros((max_num_image_crops*(per_crop_token_len//compress_reduce_factor**2),), dtype=torch.bool))
+			attention_mask_newline_full.append(torch.zeros((max_num_image_crops,), dtype=torch.bool))
+			attention_mask_newline_compress.append(torch.zeros((max_num_image_crops,), dtype=torch.bool))
+			attention_mask_text.append(cur_attention_mask)
+
+			position_ids_image_full.append(torch.zeros((max_num_image_crops*per_crop_token_len,), dtype=torch.long))
+			position_ids_image_compress.append(torch.zeros((max_num_image_crops*(per_crop_token_len//compress_reduce_factor**2),), dtype=torch.long))
+			position_ids_newline_full.append(torch.zeros((max_num_image_crops,), dtype=torch.long))
+			position_ids_newline_compress.append(torch.zeros((max_num_image_crops,), dtype=torch.long))
+			position_ids_text.append((cur_attention_mask.cumsum()-1).to(torch.long))
+
+			labels_image_full.append(torch.full((per_crop_token_len*max_num_image_crops,), IGNORE_INDEX, dtype=torch.long))
+			labels_newline_full.append(torch.full((max_num_image_crops,), IGNORE_INDEX, dtype=torch.long))
+			labels_text.append(cur_labels)
 
 		cur_input_ids_text = []
+
 		cur_attention_mask_image_full = []
 		cur_attention_mask_image_compress = []
 		cur_attention_mask_newline_full = []
@@ -1212,208 +1344,140 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, max_
 		cur_position_ids_text = []
 
 		cur_labels_image_full = []
-		cur_labels_image_compress = []
 		cur_labels_newline_full = []
-		cur_labels_newline_compress = []
 		cur_labels_text = []
 
 		image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
-		index = 0
+		position_id_count = 0
 		for i in range(len(image_token_indices) - 1):
-			cur_input_ids_text.append()
+			# prepare everything fot the text part
+			cur_len_text = image_token_indices[i+1] - image_token_indices[i]+1
+			if cur_len_text > 0:
+				cur_input_ids_text.append(cur_input_ids[image_token_indices[i]+1:image_token_indices[i+1]])
+				cur_attention_mask_text.append(cur_attention_mask[image_token_indices[i]+1:image_token_indices[i+1]])
+				cur_position_ids_text.append(torch.arange(position_id_count, position_id_count+cur_len_text, dtype=torch.long))
+				position_id_count += cur_len_text
 
+				if cur_len_text == 1:
+					# single text token between images or at the end
+					cur_labels_text.append(torch.full((1, ), IGNORE_INDEX, dtype=torch.long))
+				elif cur_len_text > 1:
+					# multiple text tokens, shift the labels by 1
+					cur_labels_text.append(torch.cat([cur_labels[image_token_indices[i]+1:image_token_indices[i+1]][1:], torch.full((1, ), IGNORE_INDEX, dtype=torch.long)]))
 
+			# prepare everything for images and newlines
+			# Here we do not consider unpadding thing or spatial concat and always append a newline after each image crop
 
-
-
-	input_ids_im_replaced = []
-	labels_im_replaced = []
-	attention_mask_im_replaced = []
-	position_ids_im_replaced = []
-	gist_token_positions = []
-	position_ids_vision_concise = []
-	attention_mask_c2f = []
-	attention_masks_all2all = []
-	image_valid_mask = []
-	vision_full_attention_mask = []
-	im_aux_attention_masks_list = [[] for _ in range(len(image_aux_token_len_list))]
-	base_image_token_len_per_side = int(image_token_len**0.5)
-	image_aux_token_len_per_side_list = [int(image_aux_token_len_per_side**0.5) for image_aux_token_len_per_side in image_aux_token_len_list]
-	# insert the padding tokens to the places of image so we can embed them together
-	for batch_idx, cur_input_ids in enumerate(input_ids):
-		num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
-		assert num_images == 1, num_images
-		image_size = image_sizes[batch_idx]
-		
-		image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
-
-		cur_input_ids_im_replaced = []
-		cur_labels_im_replaced = []
-		cur_attention_mask_im_replaced = []
-		cur_position_ids_im_replaced = []
-		
-		cur_labels = labels[batch_idx]
-		cur_attention_mask = attention_mask[batch_idx]
-		index = 0
-		for i in range(len(image_token_indices) - 1):
-			# still keep the first image token in input_ids for further use
-			cur_input_ids_im_replaced.append(cur_input_ids[image_token_indices[i]+1:image_token_indices[i+1]+1])
-			cur_labels_im_replaced.append(cur_labels[image_token_indices[i]+1:image_token_indices[i+1]])
-			cur_attention_mask_im_replaced.append(cur_attention_mask[image_token_indices[i]+1:image_token_indices[i+1]])
-			cur_position_ids_im_replaced.append(torch.arange(index, index+image_token_indices[i+1]-(image_token_indices[i]+1), dtype=torch.long, device=cur_input_ids.device))
-			index += image_token_indices[i+1]-(image_token_indices[i]+1)
-			
 			if i < len(image_token_indices) - 2:
-				num_tokens_per_side = int(image_token_len**0.5)
-				num_tokens_per_side_concise = int(image_token_len_concise**0.5)
-				image_token_len_with_newline = image_token_len + num_tokens_per_side
-				cur_input_ids_im_replaced.append(torch.full((image_token_len_with_newline-1,), 0, device=cur_input_ids.device, dtype=cur_input_ids.dtype))
-				cur_labels_im_replaced.append(torch.full((image_token_len_with_newline,), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
+				cur_image_info = prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False)
+				cur_attention_mask_image_full.append(cur_image_info['attention_mask_image_full'])
+				cur_attention_mask_image_compress.append(cur_image_info['attention_mask_image_compress'])
+				cur_attention_mask_newline_full.append(cur_image_info['attention_mask_inewline_full'])
+				cur_attention_mask_newline_compress.append(cur_image_info['attention_mask_newline_compress'])
 
-				cur_im_attention_mask, cur_im_position_ids = prepare_image_info(image_size, image_token_len, newline=True)
-				cur_vision_full_attention_mask, _ = prepare_image_info(image_size, image_token_len, newline=False)
-				reduce_factor = num_tokens_per_side//num_tokens_per_side_concise
-				cur_vision_full_attention_mask = cur_vision_full_attention_mask.view(num_tokens_per_side_concise, reduce_factor, num_tokens_per_side_concise, reduce_factor).permute(0, 2, 1, 3).contiguous().flatten(0,1).flatten(1,2)
-				cur_vision_full_attention_mask[cur_vision_full_attention_mask.sum(dim=1) == 0] = True
-				cur_vision_full_attention_mask = torch.cat([cur_vision_full_attention_mask, torch.ones((image_token_len_concise, 1), dtype=cur_vision_full_attention_mask.dtype)], dim=1)
-				vision_full_attention_mask.append(cur_vision_full_attention_mask)
+				cur_position_ids_image_full.append(cur_image_info['position_ids_image_full']+position_id_count)
+				cur_position_ids_image_compress.append(cur_image_info['position_ids_image_compress']+position_id_count)
+				cur_position_ids_newline_full.append(cur_image_info['position_ids_newline_full']+position_id_count)
+				cur_position_ids_newline_compress.append(cur_image_info['position_ids_newline_compress']+position_id_count)
 
-				cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
-				cur_im_position_ids_concise += index
-				# index = cur_im_position_ids_concise.max()+1
-				position_ids_vision_concise.append(cur_im_position_ids_concise)
-
-				for aux_i, image_aux_token_len_per_side in enumerate(image_aux_token_len_per_side_list):
-					assert image_aux_token_len_per_side >= base_image_token_len_per_side
-					num_base_crops_per_aux_side = image_aux_token_len_per_side//base_image_token_len_per_side
-
-					cur_im_aux_attention_mask, _ = prepare_image_info(image_size, image_aux_token_len_per_side**2)
-					cur_im_aux_attention_mask = cur_im_aux_attention_mask.view(base_image_token_len_per_side, num_base_crops_per_aux_side, base_image_token_len_per_side, num_base_crops_per_aux_side)
-					cur_im_aux_attention_mask = cur_im_aux_attention_mask.permute(0, 2, 1, 3).contiguous().flatten(0,1).flatten(1,2)
-					cur_im_aux_attention_mask[cur_im_aux_attention_mask.sum(dim=1) == 0] = True
-					im_aux_attention_masks_list[aux_i].append(cur_im_aux_attention_mask)
-				cur_im_position_ids += index
+				position_id_count += per_crop_token_len+1
 				
-				if cur_attention_mask[image_token_indices[i+1]]:
-					cur_attention_mask_im_replaced.append(cur_im_attention_mask)
-					cur_position_ids_im_replaced.append(cur_im_position_ids.to(torch.long))
-					index = cur_im_position_ids.max()+1
-					image_valid_mask.append(1)
+
+				cur_labels_image_full.append(torch.full((per_crop_token_len,) , IGNORE_INDEX, dtype=torch.long))
+				# most of the labels for newlines should be IGNORE but the very last one
+				# next token is text
+				if i == num_image_crops-1 or image_token_indices[i+1] != image_token_indices[i+2] + 1:
+					cur_labels_newline_full.append(cur_labels[image_token_indices[i+1]+1:image_token_indices[i+1]+2])
+				# next token is image
 				else:
-					num_tokens_per_side = int(image_token_len**0.5)
-					image_token_len_with_newline = image_token_len + num_tokens_per_side
-					cur_attention_mask_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_attention_mask.device, dtype=cur_attention_mask.dtype))
-					cur_position_ids_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_input_ids.device, dtype=torch.long))
-					image_valid_mask.append(0)
-				# cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
-				# cur_im_position_ids_concise += index
-				# # index = cur_im_position_ids_concise.max()+1
-				# position_ids_vision_concise.append(cur_im_position_ids_concise)
-		
-		cur_input_ids_im_replaced = torch.cat(cur_input_ids_im_replaced)[:max_length]
-		cur_labels_im_replaced = torch.cat(cur_labels_im_replaced)[:max_length]
-		cur_attention_mask_im_replaced = torch.cat(cur_attention_mask_im_replaced)[:max_length]
-		cur_position_ids_im_replaced = torch.cat(cur_position_ids_im_replaced)[:max_length]
+					cur_labels_newline_full.append(torch.full((1,), IGNORE_INDEX, dtype=torch.long))
 
-		image_token_index = image_token_indices[1]
-		image_token_end_index = image_token_index + image_token_len_with_newline
-		first_answer_index = len(cur_labels_im_replaced)-1
-		for index_i in range(image_token_end_index, len(cur_labels_im_replaced)):
-			if cur_labels_im_replaced[index_i] != IGNORE_INDEX:
-				first_answer_index = index_i
-				break
-		gist_token_positions.append(first_answer_index-1)
+		# add dummy images & newlines to max_num_image_crops
+		if num_image_crops < max_num_image_crops:
+			num_image_crops_padded = max_num_image_crops - num_image_crops
 
-		input_ids_im_replaced.append(cur_input_ids_im_replaced)
-		labels_im_replaced.append(cur_labels_im_replaced)
-		position_ids_im_replaced.append(cur_position_ids_im_replaced)
-		
+			cur_image_info_dummy = prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=True, dummy_num=num_image_crops_padded)
+
+			cur_attention_mask_image_full.append(cur_image_info_dummy['attention_mask_image_full'])
+			cur_attention_mask_image_compress.append(cur_image_info_dummy['attention_mask_image_compress'])
+			cur_attention_mask_newline_full.append(cur_image_info_dummy['attention_mask_inewline_full'])
+			cur_attention_mask_newline_compress.append(cur_image_info_dummy['attention_mask_newline_compress'])
+
+			cur_position_ids_image_full.append(cur_image_info_dummy['position_ids_image_full'])
+			cur_position_ids_image_compress.append(cur_image_info_dummy['position_ids_image_compress'])
+			cur_position_ids_newline_full.append(cur_image_info_dummy['position_ids_newline_full'])
+			cur_position_ids_newline_compress.append(cur_image_info_dummy['position_ids_newline_compress'])
+
+			cur_labels_image_full.append(torch.full((per_crop_token_len*num_image_crops_padded,) , IGNORE_INDEX, dtype=torch.long))
+
+			cur_labels_newline_full.append(torch.full((num_image_crops_padded,), IGNORE_INDEX, dtype=torch.long))
+
+		input_ids_text.append(cur_input_ids_text)
+
+		attention_mask_image_full.append(torch.cat(cur_attention_mask_image_full))
+		attention_mask_image_compress.append(torch.cat(cur_attention_mask_image_compress))
+		attention_mask_newline_full.append(torch.cat(cur_attention_mask_newline_full))
+		attention_mask_newline_compress.append(torch.cat(cur_attention_mask_newline_compress))
+		attention_mask_text.append(torch.cat(cur_attention_mask_text))
+
+		position_ids_image_full.append(torch.cat(cur_position_ids_image_full))
+		position_ids_image_compress.append(torch.cat(cur_position_ids_image_compress))
+		position_ids_newline_full.append(torch.cat(cur_position_ids_newline_full))
+		position_ids_newline_compress.append(torch.cat(cur_position_ids_newline_compress))
+		position_ids_text.append(torch.cat(cur_position_ids_text))
+
+		labels_image_full.append(torch.cat(cur_labels_image_full))
+		labels_newline_full.append(torch.cat(cur_labels_newline_full))
+		labels_text.append(torch.cat(cur_labels_text))
 
 
-		min_dtype = torch.finfo(torch.bfloat16).min
+	# truncate each text and right pad them to the fixed max length
+	non_text_len = max_num_image_crops*(per_crop_token_len+1)
+	max_text_len = max_length - non_text_len
+	for batch_idx in range(len(input_ids)):
+		cur_text_len = len(input_ids_text[batch_idx])
+		if cur_text_len > max_text_len:
+			input_ids_text[batch_idx] = input_ids_text[batch_idx][:max_text_len]
+			attention_mask_text[batch_idx] = attention_mask_text[batch_idx][:max_text_len]
+			position_ids_text[batch_idx] = position_ids_text[batch_idx][:max_text_len]
+			labels_text[batch_idx] = labels_text[batch_idx][:max_text_len]
+		elif cur_text_len < max_text_len:
+			pad_len = max_text_len - cur_text_len
+			input_ids_text[batch_idx] = torch.cat([input_ids_text[batch_idx], torch.full((pad_len, ), pad_token_id, dtype=input_ids_text[batch_idx].dtype)])
+			attention_mask_text[batch_idx] = torch.cat([attention_mask_text[batch_idx], torch.full((pad_len, ), 0, dtype=torch.bool)])
+			position_ids_text[batch_idx] = torch.cat([position_ids_text[batch_idx], torch.full((pad_len, ), 0, dtype=torch.long)])
+			labels_text[batch_idx] = torch.cat([labels_text[batch_idx], torch.full((pad_len, ), IGNORE_INDEX, dtype=torch.long)])
 
-		cur_attention_mask_im_concise_full = torch.cat([cur_im_attention_mask_concise, cur_im_attention_mask])
-		cur_attention_mask_im_concise_full = torch.where(cur_attention_mask_im_concise_full, 0, min_dtype)
-		cur_attention_mask_im_concise_full = cur_attention_mask_im_concise_full.view(1, 1, -1)
+	input_ids_text = torch.stack(input_ids_text)
+	attention_mask_image_full = torch.stack(attention_mask_image_full)
+	attention_mask_image_compress = torch.stack(attention_mask_image_compress)
+	attention_mask_newline_full = torch.stack(attention_mask_newline_full)
+	attention_mask_newline_compress = torch.stack(attention_mask_newline_compress)
+	attention_mask_text = torch.stack(attention_mask_text)
 
-		cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
-		cur_im_attention_mask_concise = combine_causal_attention_mask(len(cur_im_attention_mask_concise), cur_im_attention_mask_concise)
-		num_tokens_per_side_concise = int(image_token_len_concise**0.5)
-		image_token_len_concise_with_newline = image_token_len_concise + num_tokens_per_side_concise
+	position_ids_image_full = torch.stack(position_ids_image_full)
+	position_ids_image_compress = torch.stack(position_ids_image_compress)
+	position_ids_newline_full = torch.stack(position_ids_newline_full)
+	position_ids_newline_compress = torch.stack(position_ids_newline_compress)
+	position_ids_text = torch.stack(position_ids_text)
 
+	labels_image_full = torch.stack(labels_image_full)
+	labels_newline_full = torch.stack(labels_newline_full)
+	labels_text = torch.stack(labels_text)
 
-		len_sys_full_text = len(cur_input_ids_im_replaced)
-		len_sys_all = len(cur_input_ids_im_replaced) + image_token_len_concise_with_newline
-		len_sys_concise_text = len_sys_full_text + image_token_len_concise_with_newline - image_token_len_with_newline 
+	labels = torch.cat([labels_image_full, labels_newline_full, labels_text])
+	attention_mask = torch.cat([attention_mask_image_full, attention_mask_newline_full, attention_mask_text])
+	position_ids = torch.cat([position_ids_image_full, position_ids_newline_full, position_ids_text])
 
-		# [sys, concise, text] to [sys, concise, full, text]
-		cur_attention_mask_c2f = torch.ones((1, len_sys_concise_text, len_sys_all)) * min_dtype
+	# prepare the 4D attention masks for regular attention and compressv attention
 
-		# sys to all
-		cur_attention_mask_c2f[:, :image_position, :image_position] = cur_attention_mask_im_replaced[:, :image_position, :image_position] # sys to sys
+	# regular attention: Q=[image_full, newline_full, text], KV=[image_full, newline_full, text]
+	attention_mask_regular_4d = calculate_causal_attention_mask(position_ids, position_ids, attention_mask)
 
-		# concise to all
-		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_concise_with_newline, :image_position] # concise to sys
-		cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise # concise to concise
-		# cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position:image_position+image_token_len_concise_with_newline] = min_dtype # concise to concise
-		# cur_attention_mask_c2f[:, image_position:image_position+image_token_len_concise_with_newline, image_position+image_token_len_concise_with_newline:image_position+image_token_len_concise_with_newline+image_token_len_with_newline] = cur_attention_mask_im_concise_full[:, :, image_token_len_concise_with_newline:].repeat(1, image_token_len_concise_with_newline, 1) # concise to full
+	# compressv attention: Q=[image_compress, newline_compress, text], KV=[image_compress, newline_compress, image_full, newline_full, text]
+	attention_mask_fast_4d = calculate_causal_attention_mask(torch.cat([position_ids_image_compress, position_ids_newline_compress, position_ids_text]), torch.cat([position_ids_image_compress, position_ids_newline_compress, position_ids_image_full, position_ids_newline_full, position_ids_text]), torch.cat([attention_mask_image_compress, attention_mask_newline_compress, attention_mask_image_full, attention_mask_newline_full, attention_mask_text]))
 
-		# text to all
-		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
-		# print(step, flush=True)
-		# if step < 1000:
-		# 	concise_p = 0.5
-		# elif step < 1800:
-		# 	concise_p = 0.3
-		# else:
-		# 	concise_p = -1
-
-		concise_p = -1
-
-		if random.random() < concise_p:
-			# see concise only
-			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
-			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline+image_token_len_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position+image_token_len_with_newline:] # text to text
-		else:
-			# see full only
-			# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
-			cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
-			
-		# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position:image_position+image_token_len_concise_with_newline] = cur_im_attention_mask_concise[:, -1:, :].repeat(1, len_sys_concise_text-image_position-image_token_len_concise_with_newline,1) # text to concise
-		# cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, image_position+image_token_len_concise_with_newline:] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, image_position:] # text to full+text
-		cur_attention_masks_all2all = cur_attention_mask_c2f.clone()
-		cur_attention_masks_vision2all = cur_attention_mask_im_replaced[:, image_position:image_position+image_token_len_with_newline, :]
-		cur_attention_masks_vision2all = torch.cat([cur_attention_masks_vision2all[:, :, :image_position], torch.ones((1, image_token_len_with_newline, image_token_len_concise_with_newline)) * min_dtype, cur_attention_masks_vision2all[:, :, image_position:]], 2)
-		cur_attention_masks_all2all = torch.cat([cur_attention_masks_all2all[:, :image_position+image_token_len_concise_with_newline], cur_attention_masks_vision2all, cur_attention_masks_all2all[:, image_position+image_token_len_concise_with_newline:]], 1)
-		
-		attention_mask_im_replaced.append(cur_attention_mask_im_replaced)
-		attention_mask_c2f.append(cur_attention_mask_c2f)
-		attention_masks_all2all.append(cur_attention_masks_all2all)
-
-	# Truncate sequences to max length as image embeddings can make the sequence longer
-	new_input_ids = [x[0:max_length] for x in input_ids_im_replaced]
-	new_labels = [x[0:max_length] for x in labels_im_replaced]
-	new_position_ids = [x[0:max_length] for x in position_ids_im_replaced]
-	new_input_ids = torch.stack(new_input_ids)
-	new_labels = torch.stack(new_labels)
-	new_position_ids = torch.stack(new_position_ids)
-	new_attention_masks = torch.stack(attention_mask_im_replaced)
-	im_aux_attention_masks_list = [torch.stack(im_aux_attention_masks) for im_aux_attention_masks in im_aux_attention_masks_list]
-	gist_token_positions = torch.tensor(gist_token_positions, dtype=torch.long)
-
-	attention_mask_c2f = torch.stack(attention_mask_c2f)
-	attention_masks_all2all = torch.stack(attention_masks_all2all)
-
-	position_ids_vision_concise = torch.stack(position_ids_vision_concise)
-
-	position_ids_sys = new_position_ids[:, :image_position]
-	position_ids_vision_full = new_position_ids[:, image_position:image_position+image_token_len_with_newline]
-	position_ids_vision_text = new_position_ids[:, image_position+image_token_len_with_newline:]
-
-	vision_full_attention_mask = torch.stack(vision_full_attention_mask)
-	image_valid_mask = torch.tensor(image_valid_mask)
-
-	return new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, image_valid_mask, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask
+	return input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, position_ids_newline_compress, attention_mask_regular_4d, attention_mask_fast_4d
 
 
 @dataclass
@@ -1437,15 +1501,9 @@ class DataCollatorForSupervisedDataset(object):
 		max_length = self.tokenizer.model_max_length
 
 		padding_side = self.tokenizer.padding_side 
+		assert padding_side == 'right'
 
 		# print_rank0("Pad token id is", self.tokenizer.pad_token_id)
-
-		if padding_side == "left":
-			input_ids = [t[:max_length] if t.shape[0] >= max_length else torch.nn.functional.pad(t, (max_length - t.shape[0], 0), 'constant', self.tokenizer.pad_token_id) for t in input_ids]
-			labels = [t[:max_length] if t.shape[0] >= max_length else torch.nn.functional.pad(t, ( max_length - t.shape[0], 0), 'constant', IGNORE_INDEX) for t in labels]
-		else:
-			input_ids = [t[:max_length] if t.shape[0] >= max_length else torch.nn.functional.pad(t, (0, max_length - t.shape[0]), 'constant', self.tokenizer.pad_token_id) for t in input_ids]
-			labels = [t[:max_length] if t.shape[0] >= max_length else torch.nn.functional.pad(t, (0, max_length - t.shape[0]), 'constant', IGNORE_INDEX) for t in labels]
 
 		input_ids = torch.stack(input_ids)
 		labels = torch.stack(labels)
@@ -1453,26 +1511,17 @@ class DataCollatorForSupervisedDataset(object):
 
 		image_sizes = [instance['image_size'] for instance in instances]
 
-
-		prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, max_num_image_crops, per_crop_token_len, compress_reduce_factor, image_aux_token_len_list, max_length)
-		
-
-		new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, image_valid_mask, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length, self.step)
-
+		input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, position_ids_newline_compress, attention_mask_regular_4d, attention_mask_fast_4d = prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length, self.tokenizer.pad_token_id)
+	
 		batch = dict(
-			input_ids=new_input_ids,
-			labels=new_labels,
-			attention_masks=new_attention_masks,
-			attention_mask_c2f=attention_mask_c2f,
-			attention_masks_all2all=attention_masks_all2all,
-			image_valid_mask=image_valid_mask,
-			vision_full_attention_mask=vision_full_attention_mask,
-			position_ids_sys=position_ids_sys,
-			position_ids_vision_concise=position_ids_vision_concise,
-			position_ids_vision_full=position_ids_vision_full,
-			position_ids_vision_text=position_ids_vision_text,
-			image_aux_attention_masks_list=im_aux_attention_masks_list,
-			gist_token_positions=gist_token_positions
+			input_ids=input_ids_text,
+			labels=labels,
+			attention_mask=attention_mask,
+			attention_mask_regular_4d=attention_mask_regular_4d,
+			attention_mask_fast_4d=attention_mask_fast_4d,
+			position_ids=position_ids,
+			position_ids_image_compress=position_ids_image_compress,
+			position_ids_newline_compress=position_ids_newline_compress,
 		)
 		if 'image_aux_list' in instances[0]:
 			image_aux_list = [instance['image_aux_list'] for instance in instances]
