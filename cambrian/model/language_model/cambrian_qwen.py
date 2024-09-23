@@ -77,7 +77,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 	def forward(
 		self,
 		input_ids: torch.LongTensor = None,
-		attention_masks: Optional[torch.Tensor] = None,
+		attention_mask: Optional[torch.Tensor] = None,
 		attention_mask_regular_4d: Optional[torch.Tensor] = None,
 		attention_mask_compress_4d: Optional[torch.Tensor] = None,
 		position_ids: Optional[torch.LongTensor] = None,
@@ -250,7 +250,7 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 	def forward(
 		self,
 		input_ids: torch.LongTensor = None,
-		attention_masks: Optional[torch.Tensor] = None,
+		attention_mask: Optional[torch.Tensor] = None,
 		attention_mask_regular_4d: Optional[torch.Tensor] = None,
 		attention_mask_compress_4d: Optional[torch.Tensor] = None,
 		position_ids: Optional[torch.LongTensor] = None,
@@ -294,7 +294,7 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 			# decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
 			outputs = self.model(
 			input_ids=input_ids,
-			attention_masks=attention_masks,
+			attention_mask=attention_mask,
 			attention_mask_regular_4d=attention_mask_regular_4d,
 			attention_mask_compress_4d=attention_mask_compress_4d,
 			position_ids=position_ids,
