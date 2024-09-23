@@ -15,7 +15,7 @@ python cambrian/train/train_tpu.py \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --max_num_image_crops 1 \
-    -per_crop_token_len 576 \
+    --per_crop_token_len 576 \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \

@@ -1,5 +1,5 @@
 
-from cambrian.train.train_fsdp import train
+from cambrian.train.train_fsdp_multi import train
 
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
