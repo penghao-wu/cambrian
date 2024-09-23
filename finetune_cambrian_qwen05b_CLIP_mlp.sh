@@ -12,7 +12,7 @@ python cambrian/train/train_tpu.py \
     --version qwen_1_5 \
     --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./cambrian_qwen05b_CLIP_mlp_2scale_dim448_skip23_24_shareGPT4V_pretrain_lr1e4/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./cambrian_qwen05b_CLIP_mlp_576_shareGPT4V_pretrain/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --image_token_len 576 \
