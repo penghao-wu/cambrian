@@ -1171,7 +1171,61 @@ def combine_causal_attention_mask(seq_len, attention_mask, dtype=torch.bfloat16)
 	return causal_mask
 	
 
-def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len=576, image_token_len_concise=36, image_aux_token_len_list=[192*192], max_length=2048, step=0):
+def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, max_num_image_crops, per_crop_token_len, compress_reduce_factor, image_aux_token_len_list=[24*24], max_length=2048):
+
+	input_ids_text = []
+
+	attention_mask_image_full = []
+	attention_mask_image_compress = []
+	attention_mask_newline_full = []
+	attention_mask_newline_compress = []
+	attention_mask_text = []
+
+	position_ids_image_full = []
+	position_ids_image_compress = []
+	position_ids_newline_full = []
+	position_ids_newline_compress = []
+	position_ids_text = []
+
+	labels_image_full = []
+	labels_image_compress = []
+	labels_newline_full = []
+	labels_newline_compress = []
+	labels_text = []
+
+	for batch_idx, cur_input_ids in enumerate(input_ids):
+		num_image_crops = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
+		if num_image_crops < max_num_image_crops:
+			num_image_crops_padded = max_num_image_crops - num_image_crops
+
+		cur_input_ids_text = []
+		cur_attention_mask_image_full = []
+		cur_attention_mask_image_compress = []
+		cur_attention_mask_newline_full = []
+		cur_attention_mask_newline_compress = []
+		cur_attention_mask_text = []
+
+		cur_position_ids_image_full = []
+		cur_position_ids_image_compress = []
+		cur_position_ids_newline_full = []
+		cur_position_ids_newline_compress = []
+		cur_position_ids_text = []
+
+		cur_labels_image_full = []
+		cur_labels_image_compress = []
+		cur_labels_newline_full = []
+		cur_labels_newline_compress = []
+		cur_labels_text = []
+
+		image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
+		index = 0
+		for i in range(len(image_token_indices) - 1):
+			cur_input_ids_text.append()
+
+
+
+
+
 	input_ids_im_replaced = []
 	labels_im_replaced = []
 	attention_mask_im_replaced = []
@@ -1367,18 +1421,16 @@ class DataCollatorForSupervisedDataset(object):
 	"""Collate examples for supervised fine-tuning."""
 
 	tokenizer: transformers.PreTrainedTokenizer
-	image_token_len: int
-	image_token_len_concise: int
+	max_num_image_crops: int
+	per_crop_token_len: int
+	compress_reduce_factor: int
 	image_aux_token_len_list: list
-	image_position: int
-	step: int
 
 	def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
-		self.step +=1
-		image_token_len = self.image_token_len
-		image_token_len_concise = self.image_token_len_concise
+		max_num_image_crops = self.max_num_image_crops
+		per_crop_token_len = self.per_crop_token_len
+		compress_reduce_factor = self.compress_reduce_factor
 		image_aux_token_len_list = self.image_aux_token_len_list
-		image_position = self.image_position
 
 		input_ids, labels = tuple([instance[key] for instance in instances]
 								  for key in ("input_ids", "labels"))
@@ -1398,25 +1450,12 @@ class DataCollatorForSupervisedDataset(object):
 		input_ids = torch.stack(input_ids)
 		labels = torch.stack(labels)
 		attention_mask = input_ids.ne(self.tokenizer.pad_token_id)
-		# insert dummy image
-		for i in range(len(input_ids)):
-			if (input_ids[i] == IMAGE_TOKEN_INDEX).sum() == 0:
-				cur_input_ids_tmp = input_ids[i].clone()
-				cur_input_ids_tmp[image_position+1:] = input_ids[i, image_position:-1]
-				cur_input_ids_tmp[image_position] = IMAGE_TOKEN_INDEX
-				input_ids[i] = cur_input_ids_tmp
 
-				cur_labels_tmp = labels[i].clone()
-				cur_labels_tmp[image_position+1:] = labels[i, image_position:-1]
-				cur_labels_tmp[image_position] = IGNORE_INDEX
-				labels[i] = cur_labels_tmp
-
-				cur_attention_mask_tmp = attention_mask[i].clone()
-				cur_attention_mask_tmp[image_position+1:] = attention_mask[i, image_position:-1]
-				cur_attention_mask_tmp[image_position] = False
-				attention_mask[i] = cur_attention_mask_tmp
 		image_sizes = [instance['image_size'] for instance in instances]
-		# new_input_ids, new_labels, new_attention_mask, new_position_ids, im_aux_attention_masks_list, gist_token_positions = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_token_len, image_aux_token_len_list, max_length)
+
+
+		prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, max_num_image_crops, per_crop_token_len, compress_reduce_factor, image_aux_token_len_list, max_length)
+		
 
 		new_input_ids, new_labels, new_attention_masks, attention_mask_c2f, attention_masks_all2all, image_valid_mask, position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text, im_aux_attention_masks_list, gist_token_positions, vision_full_attention_mask = prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, image_position, image_token_len, image_token_len_concise,image_aux_token_len_list, max_length, self.step)
 
