@@ -119,7 +119,7 @@ class CambrianMetaModel:
         connector_only = model_args.connector_only
         connector_depth = model_args.connector_depth
 
-        max_num_image_crops = model_args.connector_depth
+        max_num_image_crops = model_args.max_num_image_crops
         per_crop_token_len = model_args.per_crop_token_len
         compress_reduce_factor = model_args.compress_reduce_factor
         compress_v = model_args.compress_v
