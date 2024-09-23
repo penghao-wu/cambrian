@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_2scale_dim448_skip23_24_shareGPT4V_pretrain_lr1e4" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_pretrain" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -14,8 +14,8 @@ python cambrian/train/train_tpu.py \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
-    --image_token_len 576 \
-    --image_token_len_concise 36 \
+    --max_num_image_crops 1 \
+    -per_crop_token_len 576 \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \

@@ -197,8 +197,9 @@ class CambrianMetaModel:
                 if compress_v:
                     num_of_vision_mlp_layers = self.config.num_hidden_layers - compress_v_start_layer
                     self.config.num_of_vision_mlp_layers = num_of_vision_mlp_layers
+                    hidden_size_reduce_factor = 4 if self.config.hidden_size >= 1024 else 2
                     self.vision_mlp_layers = nn.ModuleList(
-                        [VisionMLP(self.config, self.config.hidden_size//4) for layer_idx in range(0, num_of_vision_mlp_layers)]
+                        [VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor) for layer_idx in range(0, num_of_vision_mlp_layers)]
                         )
 
         else:
@@ -392,15 +393,28 @@ class CambrianMetaForCausalLM(ABC):
         self, input_ids,
         images
     ):
-        # vision_tower = self.get_vision_tower()
-        vision_tower_aux_list = self.get_model().get_vision_tower_aux_list()
-
         assert images.ndim == 5
         bs = images.shape[0]
 
         max_num_image_crops = self.get_model().config.max_num_image_crops
+        per_crop_token_len = self.get_model().config.per_crop_token_len
 
-        bs = 
+        images = images.flatten(0, 1)
+        image_features = self.encode_images([images])[0]
+
+        image_features = image_features.view(bs, max_num_image_crops, per_crop_token_len, -1)
+
+        image_features = self.get_model().mm_projector(image_features).to(image_features.dtype)
+        image_features = image_features.flatten(1,2)
+
+        text_input_embeds = self.get_model().embed_tokens(input_ids)
+
+        newline_embeds = self.get_model().image_newline.view(1, 1, -1).repeat(bs, max_num_image_crops, 1)
+
+        input_embeds = torch.cat([image_features, newline_embeds, text_input_embeds], 1)
+
+        return None, input_embeds
+
 
         
 

@@ -50,6 +50,24 @@ class CambrianConfig(Qwen2Config):
 	debug = "debug"
 
 
+def get_image_compress(hidden_states_image_full, compress_reduce_factor, per_crop_token_len=576):
+	bs = hidden_states_image_full.shape[0]
+	num_image_crops = hidden_states_image_full.shape[1]//per_crop_token_len
+	h_full = w_full = int(per_crop_token_len**0.5)
+	h_compress = w_compress = h_full//compress_reduce_factor
+
+	hidden_states_image_full = hidden_states_image_full.view(bs*num_image_crops, h_full, w_full, -1)
+	
+	hidden_states_image_compress = nn.functional.interpolate(
+	hidden_states_image_full.permute(0, 3, 1, 2).contiguous(),
+		size=(h_compress, w_compress),
+		mode='bilinear',
+		align_corners=False
+	)
+	hidden_states_image_compress = hidden_states_image_compress.permute(0, 2, 3, 1).contiguous().view(bs, num_image_crops*h_compress*w_compress, -1)
+	return hidden_states_image_compress
+
+
 class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 	config_class = CambrianConfig
 
@@ -60,26 +78,16 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		self,
 		input_ids: torch.LongTensor = None,
 		attention_masks: Optional[torch.Tensor] = None,
-		attention_mask_c2f: Optional[torch.Tensor] = None,
-		attention_masks_all2all: Optional[torch.Tensor] = None,
-		image_valid_mask: Optional[torch.Tensor] = None,
-		vision_full_attention_mask: Optional[torch.Tensor] = None,
-		position_ids_sys: Optional[torch.LongTensor] = None,
-		position_ids_vision_concise: Optional[torch.LongTensor] = None,
-		position_ids_vision_full: Optional[torch.LongTensor] = None,
-		position_ids_vision_text: Optional[torch.LongTensor] = None,
+		attention_mask_regular_4d: Optional[torch.Tensor] = None,
+		attention_mask_compress_4d: Optional[torch.Tensor] = None,
+		position_ids: Optional[torch.LongTensor] = None,
+		position_ids_image_compress: Optional[torch.LongTensor] = None,
 		past_key_values: Optional[List[torch.FloatTensor]] = None,
 		inputs_embeds: Optional[torch.FloatTensor] = None,
 		use_cache: Optional[bool] = None,
 		output_attentions: Optional[bool] = None,
 		output_hidden_states: Optional[bool] = None,
 		return_dict: Optional[bool] = None,
-		inputs_embeds_vision_concise: Optional[torch.FloatTensor] = None,
-		vision_tower_aux_feature_list: Optional[List[torch.FloatTensor]] = None,
-		vision_tower_aux_attention_masks_list: Optional[List[torch.Tensor]] = None,
-		final_vision_feature_size: Optional[List[tuple]] = None,
-		global_context_feature: Optional[torch.Tensor] = None,
-		gist_token_positions: Optional[torch.LongTensor] = None,
 	) -> Union[Tuple, BaseModelOutputWithPast]:
 		output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
 		output_hidden_states = (
@@ -97,149 +105,113 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		all_self_attns = () if output_attentions else None
 		next_decoder_cache = None
 
-		vision_token_start_idx = self.config.image_position
-		
-		image_token_len_per_side = int(self.config.image_token_len**0.5)
-		image_token_newline_num = self.config.image_token_len + image_token_len_per_side
+		max_num_image_crops = self.config.max_num_image_crops
+		per_crop_token_len = self.config.per_crop_token_len
+		compress_reduce_factor = self.config.compress_reduce_factor
+		compress_v = self.config.compress_v
+		compress_v_start_layer = self.config.compress_v_start_layer
 
-		image_token_len_per_side_concise = int(self.config.image_token_len_concise**0.5)
-		image_token_concise_newline_num = self.config.image_token_len_concise + image_token_len_per_side_concise
-
-		hidden_states_sys = inputs_embeds[:, :vision_token_start_idx]
-		hidden_states_text = inputs_embeds[:, vision_token_start_idx+image_token_newline_num:]
-		hidden_states_vision_full = inputs_embeds[:, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]
-		hidden_states_vision_concise = inputs_embeds_vision_concise
-
-		len_sys = hidden_states_sys.shape[1]
-		len_vision_concise = hidden_states_vision_concise.shape[1]
-		len_vision_full = hidden_states_vision_full.shape[1]
-		len_text = hidden_states_text.shape[1]
+		len_image_full = max_num_image_crops * per_crop_token_len
+		len_newline_full = max_num_image_crops
+		len_image_compress = max_num_image_crops * per_crop_token_len // compress_reduce_factor**2
+		len_text = inputs_embeds.shape[1] - len_image_full - len_newline_full
 
 		hidden_states = inputs_embeds
 
-		# skip_layers = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
-		# skip_layers = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
-		# skip_layers = [_ for _ in range(0, 32)]
-		skip_layers = [_ for _ in range(12, 24)]
-		# skip_layers = []
-		# skip_layers += [0, 1, 2, 3, 4, 5]
+		hidden_states_image_full = hidden_states[:, :len_image_full]
+		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
+		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
 
-		# skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-		aux_loss_total = 0
-		for i, decoder_layer in enumerate(self.layers):
+		
+
+		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
-				all_hidden_states += (hidden_states_text,)
+				all_hidden_states += (hidden_states,)
 
-			if i in skip_layers:
-
-			# 	# [sys, vision_concise, text] to [sys, vision_full, text]
+			if not compress_v or layer_i < compress_v_start_layer:
 
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
 						decoder_layer.__call__,
-						torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], dim=1),
-						torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], dim=1),
-						# hidden_states_sys,
-						# hidden_states_vision_concise,
-						# hidden_states_vision_full,
-						# hidden_states_text,
-						attention_mask_c2f,
-						torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
-						torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1),
-						past_key_values,
-						output_attentions,
-						use_cache,
-						True,
-					)
-				else:
-					layer_outputs = decoder_layer(
-						torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], dim=1),
-						torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], dim=1),
-						# hidden_states_sys,
-						# hidden_states_vision_concise,
-						# hidden_states_vision_full,
-						# hidden_states_text,
-						attention_mask_c2f,
-						torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1),
-						torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1),
-						past_key_values,
-						output_attentions,
-						use_cache,
-						True,
-					)
-				hidden_states_vision_concise = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]
-				# hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:]
-				hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:vision_token_start_idx+image_token_concise_newline_num+len_text]
-				hidden_states_sys = layer_outputs[0][:, :vision_token_start_idx]
-
-				# hidden_states_vision_full = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num+len_text:]
-				hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
-
-				hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1)
-
-				aux_loss_total = 0
-							
-			else:
-
-				if self.gradient_checkpointing and self.training:
-					layer_outputs = self._gradient_checkpointing_func(
-						decoder_layer.__call__,
-						torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
-						torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
-						# hidden_states_sys,
-						# hidden_states_vision_concise,
-						# hidden_states_vision_full,
-						# hidden_states_text,
-						attention_masks,
-						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
-						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
+						hidden_states,
+						attention_mask_regular_4d,
+						position_ids,
+						position_ids,
 						past_key_values,
 						output_attentions,
 						use_cache,
 						False,
+						len_image_compress,
+						len_image_full
 					)
 				else:
 					layer_outputs = decoder_layer(
-						torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
-						torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
-						# hidden_states_sys,
-						# hidden_states_vision_concise,
-						# hidden_states_vision_full,
-						# hidden_states_text,
-						attention_masks,
-						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
-						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
+						hidden_states,
+						attention_mask_regular_4d,
+						position_ids,
+						position_ids,
 						past_key_values,
 						output_attentions,
 						use_cache,
-						fast_vision=False,
+						False,
+						len_image_compress,
+						len_image_full
+					)
+				
+				hidden_states = layer_outputs[0]
+							
+			else:
+				if layer_i == compress_v_start_layer:
+					hidden_states_image_full = hidden_states[:, :len_image_full]
+					hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
+					hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
+
+					position_ids_image_full = position_ids[:, :len_image_full]
+					position_ids_newline_full = position_ids[:, len_image_full:len_image_full+len_newline_full]
+					position_ids_text = position_ids[:, len_image_full+len_newline_full:]
+
+					hidden_states_image_compress = get_image_compress(hidden_states_image_full, compress_reduce_factor, per_crop_token_len)
+
+					position_ids_compress_q = torch.cat([position_ids_image_compress, position_ids_newline_full, position_ids_text], 1)
+					position_ids_compress_kv = torch.cat([position_ids_image_compress, position_ids_image_full,  position_ids_newline_full, position_ids_text], 1)
+
+
+				if self.gradient_checkpointing and self.training:
+					layer_outputs = self._gradient_checkpointing_func(
+						decoder_layer.__call__,
+						torch.cat([hidden_states_image_compress, hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1),
+						attention_mask_compress_4d,
+						position_ids_compress_q,
+						position_ids_compress_kv,
+						past_key_values,
+						output_attentions,
+						use_cache,
+						True,
+						len_image_compress,
+						len_image_full
+					)
+				else:
+					layer_outputs = decoder_layer(
+						torch.cat([hidden_states_image_compress, hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1),
+						attention_mask_compress_4d,
+						position_ids_compress_q,
+						position_ids_compress_kv,
+						past_key_values,
+						output_attentions,
+						use_cache,
+						True,
+						len_image_compress,
+						len_image_full
 					)
 
-				
-				hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_newline_num:]
-				hidden_states_sys = layer_outputs[0][:, :vision_token_start_idx]
-				hidden_states_vision_full = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]
+				hidden_states_image_compress = layer_outputs[0][:, :len_image_compress]
+				hidden_states_newline_full = layer_outputs[0][:, len_image_compress:len_image_compress+len_newline_full]
+				hidden_states_text = layer_outputs[0][:, len_image_compress+len_newline_full:]
 
-				hidden_states = layer_outputs[0]
-				if (i+1) in skip_layers:
-					bs = hidden_states_vision_full.shape[0]
-					image_features_full_with_newline = hidden_states_vision_full.clone()
-					image_features_full_with_newline = image_features_full_with_newline.view(bs, image_token_len_per_side, image_token_len_per_side+1, -1)
-					image_features_full = image_features_full_with_newline[:, :, :-1, :]
-					image_features_full_newline = image_features_full_with_newline[:, :, -1:, :]
-					reduce_factor = image_token_len_per_side // image_token_len_per_side_concise
-					image_features_concise_newline = image_features_full_newline[:, ::reduce_factor, :, :].contiguous()
+				hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
 
-					image_features_concise = F.interpolate(
-					image_features_full.permute(0, 3, 1, 2).contiguous().to(torch.float32),
-						size=(image_token_len_per_side_concise, image_token_len_per_side_concise),
-						mode='bilinear',
-						align_corners=False
-					).to(image_features_full.dtype)
-					image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous()
-					image_features_concise_with_newline = torch.cat([image_features_concise, image_features_concise_newline], 2).flatten(1, 2)
-					hidden_states_vision_concise = image_features_concise_with_newline
-		
+				if layer_i == len(self.layers) - 1:
+					hidden_states = torch.cat([hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1)
 
 		hidden_states = self.norm(hidden_states)
 
@@ -283,7 +255,6 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 		attention_mask_compress_4d: Optional[torch.Tensor] = None,
 		position_ids: Optional[torch.LongTensor] = None,
 		position_ids_image_compress: Optional[torch.LongTensor] = None,
-		position_ids_newline_compress: Optional[torch.LongTensor] = None,
 		past_key_values: Optional[List[torch.FloatTensor]] = None,
 		inputs_embeds: Optional[torch.FloatTensor] = None,
 		labels: Optional[torch.LongTensor] = None,
@@ -324,26 +295,16 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 			outputs = self.model(
 			input_ids=input_ids,
 			attention_masks=attention_masks,
-			attention_mask_c2f=attention_mask_c2f,
-			attention_masks_all2all=attention_masks_all2all,
-			image_valid_mask=image_valid_mask,
-			vision_full_attention_mask=vision_full_attention_mask,
-			position_ids_sys=position_ids_sys,
-			position_ids_vision_concise=position_ids_vision_concise,
-			position_ids_vision_full=position_ids_vision_full,
-			position_ids_vision_text=position_ids_vision_text,
+			attention_mask_regular_4d=attention_mask_regular_4d,
+			attention_mask_compress_4d=attention_mask_compress_4d,
+			position_ids=position_ids,
+			position_ids_image_compress=position_ids_image_compress,
 			past_key_values=past_key_values,
 			inputs_embeds=inputs_embeds,
 			use_cache=use_cache,
 			output_attentions=output_attentions,
 			output_hidden_states=output_hidden_states,
 			return_dict=return_dict,
-			inputs_embeds_vision_concise=inputs_embeds_vision_concise,
-			vision_tower_aux_feature_list=vision_tower_aux_feature_list,
-			vision_tower_aux_attention_masks_list=vision_tower_aux_attention_masks_list, 
-			final_vision_feature_size=final_vision_feature_size,
-			global_context_feature=global_context_feature,
-			gist_token_positions=gist_token_positions
 		)
 
 		# inference
@@ -379,16 +340,16 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 				)
 
 		hidden_states = outputs[0]
-		if labels is not None:
-			labels = labels[:, -hidden_states.shape[1]:]
 		logits = self.lm_head(hidden_states)
 		logits = logits.float()
 
 		loss = None
 		if labels is not None:
 			# Shift so that tokens < n predict n
-			shift_logits = logits[..., :-1, :].contiguous()
-			shift_labels = labels[..., 1:].contiguous()
+			# shift_logits = logits[..., :-1, :].contiguous()
+			# shift_labels = labels[..., 1:].contiguous()
+			shift_logits = logits
+			shift_labels = labels
 			# Flatten the tokens
 			loss_fct = CrossEntropyLoss()
 			shift_logits = shift_logits.view(-1, self.config.vocab_size)
@@ -550,11 +511,6 @@ Qwen2SdpaAttention.forward = Qwen2SdpaAttention_forward
 def decoder_forward(
 	self,
 	hidden_states,
-	kv_states,
-	# hidden_states_sys = None,
-	# hidden_states_vision_concise = None,
-	# hidden_states_vision_full = None,
-	# hidden_states_text = None,
 	attention_mask = None,
 	position_ids_q = None,
 	position_ids_kv = None,
@@ -562,30 +518,18 @@ def decoder_forward(
 	output_attentions = False,
 	use_cache = False,
 	fast_vision=False,
+	len_image_compress=36,
+	len_image_full=576,
 	**kwargs,):
-		# normal
-		# if not fast_vision:
-		residual = hidden_states
-		hidden_states = self.input_layernorm(hidden_states)
-		kv_states = self.input_layernorm(kv_states)
-
-		# else:
-		# 	residual = hidden_states
-		# 	len_sys = hidden_states_sys.shape[1]
-		# 	len_vision_concise = hidden_states_vision_concise.shape[1]
-		# 	len_vision_full = hidden_states_vision_full.shape[1]
-		# 	len_text = hidden_states_text.shape[1]
-
-		# 	hidden_states_all = torch.cat([hidden_states_vision_full, hidden_states], 1)
-		# 	hidden_states_all = self.input_layernorm(hidden_states_all)
-
-		# 	hidden_states_vision_full = hidden_states_all[:, :len_vision_full]
-		# 	hidden_states_sys = hidden_states_all[:, len_vision_full:len_vision_full+len_sys]
-		# 	hidden_states_vision_concise = hidden_states_all[:, len_vision_full+len_sys:len_vision_full+len_sys+len_vision_concise]
-		# 	hidden_states_text = hidden_states_all[:, -len_text:]
-
-		# 	hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
-		# 	kv_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
+		if fast_vision:
+			residual = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
+			hidden_states = self.input_layernorm(hidden_states)
+			kv_states = hidden_states
+			hidden_states = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
+		else:
+			residual = hidden_states
+			hidden_states = self.input_layernorm(hidden_states)
+			kv_states = kv_states
 
 		# Cross Attention
 		hidden_states, self_attn_weights, present_key_value = self.self_attn(
@@ -601,94 +545,10 @@ def decoder_forward(
 		)
 		hidden_states = residual + hidden_states
 
-		# if vision_full is not None:
-		# 	vision_concise = hidden_states[:, vision_concise_index[0]:vision_concise_index[1]]
-		# 	vision_full = self.vision_sampler_layers(vision_full, vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
-		# 	hidden_states = torch.cat([hidden_states, vision_full], 1)
-
 		# Fully Connected
 		residual = hidden_states
 		hidden_states = self.post_attention_layernorm(hidden_states)
 		hidden_states = self.mlp(hidden_states)
-		hidden_states = residual + hidden_states
-
-		outputs = (hidden_states,)
-
-		if output_attentions:
-			outputs += (self_attn_weights,)
-
-		if use_cache:
-			outputs += (present_key_value,)
-
-		return outputs
-
-
-def decoder_forward_vision(
-	self,
-	hidden_states_sys,
-	hidden_states_vision_concise,
-	hidden_states_vision_full,
-	hidden_states_text,
-	attention_mask = None,
-	position_ids_sys = None,
-	position_ids_vision_concise = None,
-	position_ids_vision_full = None,
-	position_ids_vision_text = None,
-	image_token_len_per_side = None,
-	image_token_len_per_side_concise = None,
-	vision_full_attention_mask = None,
-	past_key_value = None,
-	output_attentions = False,
-	use_cache = False,
-	**kwargs,):
-		len_sys = hidden_states_sys.shape[1]
-		len_vision_concise = hidden_states_vision_concise.shape[1]
-		len_vision_full = hidden_states_vision_full.shape[1]
-		len_text = hidden_states_text.shape[1]
-
-		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-		residual = hidden_states
-
-		hidden_states = self.input_layernorm(hidden_states)
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(hidden_states, [len_sys, len_vision_concise, len_vision_full, len_text], 1)
-
-		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
-		kv_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-		position_ids_q = torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1)
-		position_ids_kv = torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1)
-
-		# Cross Attention
-		q_states, self_attn_weights, present_key_value = self.self_attn(
-			hidden_states=q_states,
-			kv_states = kv_states,
-			attention_mask=attention_mask,
-			position_ids_q=position_ids_q,
-			position_ids_kv=position_ids_kv,
-			past_key_value=past_key_value,
-			output_attentions=output_attentions,
-			use_cache=use_cache,
-			**kwargs,
-		)
-
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
-		hidden_states_vision_full = self.vision_sampler_layers.sa(hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
-
-		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-		hidden_states = residual + hidden_states
-
-		# Fully Connected
-		residual = hidden_states
-		hidden_states = self.post_attention_layernorm(hidden_states)
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(hidden_states, [len_sys, len_vision_concise, len_vision_full, len_text], 1)
-
-
-		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
-		q_states = self.mlp(q_states)
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
-		hidden_states_vision_full = self.vision_sampler_layers.ffn(hidden_states_vision_full)
-		
-		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-
 		hidden_states = residual + hidden_states
 
 		outputs = (hidden_states,)
