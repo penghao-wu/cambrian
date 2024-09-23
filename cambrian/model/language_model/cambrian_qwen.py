@@ -149,6 +149,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						past_key_values,
 						output_attentions,
 						use_cache,
+						fast_vision=True,
 					)
 				else:
 					layer_outputs = decoder_layer(
@@ -164,6 +165,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						past_key_values,
 						output_attentions,
 						use_cache,
+						fast_vision=True,
 					)
 				hidden_states_vision_concise = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_concise_newline_num]
 				# hidden_states_text = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num:]
@@ -184,31 +186,33 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						decoder_layer.__call__,
 						torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
 						# torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
-						None,
-						None,
-						None,
-						None,
+						hidden_states_sys,
+						hidden_states_vision_concise,
+						hidden_states_vision_full,
+						hidden_states_text,
 						attention_masks,
 						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
 						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
 						past_key_values,
 						output_attentions,
 						use_cache,
+						fast_vision=False,
 					)
 				else:
 					layer_outputs = decoder_layer(
 						torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
 						# torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
-						None,
-						None,
-						None,
-						None,
+						hidden_states_sys,
+						hidden_states_vision_concise,
+						hidden_states_vision_full,
+						hidden_states_text,
 						attention_masks,
 						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
 						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
 						past_key_values,
 						output_attentions,
 						use_cache,
+						fast_vision=False,
 					)
 
 				
@@ -575,9 +579,10 @@ def decoder_forward(
 	past_key_value = None,
 	output_attentions = False,
 	use_cache = False,
+	fast_vision=False,
 	**kwargs,):
 		# normal
-		if hidden_states_vision_full is None:
+		if not fast_vision:
 			residual = hidden_states
 			hidden_states = self.input_layernorm(hidden_states)
 			kv_states = hidden_states
