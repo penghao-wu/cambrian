@@ -181,9 +181,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 					layer_outputs = self._gradient_checkpointing_func(
 						decoder_layer.__call__,
 						torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
-						torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1),
 						attention_masks,
-						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
 						torch.cat([position_ids_sys, position_ids_vision_full, position_ids_vision_text], dim=1),
 						past_key_values,
 						output_attentions,
@@ -471,216 +469,215 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 	
 
 
-from transformers.models.qwen2.modeling_qwen2 import Qwen2SdpaAttention, Qwen2DecoderLayer, Qwen2RMSNorm, rotate_half, repeat_kv
-def apply_rotary_pos_emb(q, k, cos, sin, position_ids_q, position_ids_k, unsqueeze_dim=1):
-	cos_q = cos[position_ids_q].unsqueeze(unsqueeze_dim)
-	sin_q = sin[position_ids_q].unsqueeze(unsqueeze_dim)
-	q_embed = (q * cos_q) + (rotate_half(q) * sin_q)
-	cos_k = cos[position_ids_k].unsqueeze(unsqueeze_dim)
-	sin_k = sin[position_ids_k].unsqueeze(unsqueeze_dim)
-	k_embed = (k * cos_k) + (rotate_half(k) * sin_k)
-	return q_embed, k_embed
+from transformers.models.qwen2.modeling_qwen2 import Qwen2SdpaAttention, Qwen2DecoderLayer, Qwen2RMSNorm, rotate_half, repeat_kv, apply_rotary_pos_emb
+# def apply_rotary_pos_emb(q, k, cos, sin, position_ids_q, position_ids_k, unsqueeze_dim=1):
+# 	cos_q = cos[position_ids_q].unsqueeze(unsqueeze_dim)
+# 	sin_q = sin[position_ids_q].unsqueeze(unsqueeze_dim)
+# 	q_embed = (q * cos_q) + (rotate_half(q) * sin_q)
+# 	cos_k = cos[position_ids_k].unsqueeze(unsqueeze_dim)
+# 	sin_k = sin[position_ids_k].unsqueeze(unsqueeze_dim)
+# 	k_embed = (k * cos_k) + (rotate_half(k) * sin_k)
+# 	return q_embed, k_embed
 
-
-# Adapted from Qwen2Attention.forward
 def Qwen2SdpaAttention_forward(
-	self,
-	hidden_states,
-	kv_states,
-	attention_mask = None,
-	position_ids_q = None,
-	position_ids_kv = None,
-	past_key_value = None,
-	output_attentions = False,
-	use_cache= False,
-):
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional[Cache] = None,
+        output_attentions: bool = False,
+        use_cache: bool = False,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        if output_attentions:
+            # TODO: Improve this warning with e.g. `model.config.attn_implementation = "manual"` once this is implemented.
+            logger.warning_once(
+                "Qwen2Model is using Qwen2SdpaAttention, but `torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to the manual attention implementation, "
+                'but specifying the manual implementation will be required from Transformers version v5.0.0 onwards. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
+            )
+            return super().forward(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_value=past_key_value,
+                output_attentions=output_attentions,
+                use_cache=use_cache,
+            )
 
-	bsz, q_len, _ = hidden_states.size()
-	kv_seq_len = kv_states.shape[1]
+        bsz, q_len, _ = hidden_states.size()
 
-	query_states = self.q_proj(hidden_states).to(hidden_states.dtype)
-	key_states = self.k_proj(kv_states).to(hidden_states.dtype)
-	value_states = self.v_proj(kv_states).to(hidden_states.dtype)
+        query_states = self.q_proj(hidden_states).to(hidden_states.dtype)
+        key_states = self.k_proj(hidden_states).to(hidden_states.dtype)
+        value_states = self.v_proj(hidden_states).to(hidden_states.dtype)
 
-	query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-	key_states = key_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-	value_states = value_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+        key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
 
-	cos, sin = self.rotary_emb(value_states, seq_len=max(q_len, kv_seq_len))
+        kv_seq_len = key_states.shape[-2]
+        if past_key_value is not None:
+            kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
+        cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
 
-	query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids_q, position_ids_kv)
+        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
 
-	key_states = repeat_kv(key_states, self.num_key_value_groups)
-	value_states = repeat_kv(value_states, self.num_key_value_groups)
+        if past_key_value is not None:
+            cache_kwargs = {"sin": sin, "cos": cos}  # Specific to RoPE models
+            key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
-	if attention_mask is not None:
-		if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
-			raise ValueError(
-				f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
-			)
+        key_states = repeat_kv(key_states, self.num_key_value_groups)
+        value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-	# SDPA with memory-efficient backend is currently (torch==2.1.2) bugged with non-contiguous inputs with custom attn_mask,
-	# Reference: https://github.com/pytorch/pytorch/issues/112577.
-	if query_states.device.type == "cuda" and attention_mask is not None:
-		query_states = query_states.contiguous()
-		key_states = key_states.contiguous()
-		value_states = value_states.contiguous()
+        if attention_mask is not None:
+            if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
+                raise ValueError(
+                    f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
+                )
 
-	attn_output = torch.nn.functional.scaled_dot_product_attention(
-		query_states,
-		key_states,
-		value_states,
-		attn_mask=attention_mask,
-		dropout_p=self.attention_dropout if self.training else 0.0,
-		# The q_len > 1 is necessary to match with AttentionMaskConverter.to_causal_4d that does not create a causal mask in case q_len == 1.
-		is_causal=self.is_causal and attention_mask is None and q_len > 1,
-	)
+        # SDPA with memory-efficient backend is currently (torch==2.1.2) bugged with non-contiguous inputs with custom attn_mask,
+        # Reference: https://github.com/pytorch/pytorch/issues/112577.
+        if query_states.device.type == "cuda" and attention_mask is not None:
+            query_states = query_states.contiguous()
+            key_states = key_states.contiguous()
+            value_states = value_states.contiguous()
 
-	attn_output = attn_output.transpose(1, 2).contiguous()
-	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
+        attn_output = torch.nn.functional.scaled_dot_product_attention(
+            query_states,
+            key_states,
+            value_states,
+            attn_mask=attention_mask,
+            dropout_p=self.attention_dropout if self.training else 0.0,
+            # The q_len > 1 is necessary to match with AttentionMaskConverter.to_causal_4d that does not create a causal mask in case q_len == 1.
+            is_causal=self.is_causal and attention_mask is None and q_len > 1,
+        )
 
-	attn_output = self.o_proj(attn_output)
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
 
-	return attn_output, None, past_key_value
+        attn_output = self.o_proj(attn_output)
+
+        return attn_output, None, past_key_value
+
+
+# # Adapted from Qwen2Attention.forward
+# def Qwen2SdpaAttention_forward(
+# 	self,
+# 	hidden_states,
+# 	kv_states,
+# 	attention_mask = None,
+# 	position_ids_q = None,
+# 	position_ids_kv = None,
+# 	past_key_value = None,
+# 	output_attentions = False,
+# 	use_cache= False,
+# ):
+
+# 	bsz, q_len, _ = hidden_states.size()
+# 	kv_seq_len = kv_states.shape[1]
+
+# 	query_states = self.q_proj(hidden_states).to(hidden_states.dtype)
+# 	key_states = self.k_proj(kv_states).to(hidden_states.dtype)
+# 	value_states = self.v_proj(kv_states).to(hidden_states.dtype)
+
+# 	query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+# 	key_states = key_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+# 	value_states = value_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+
+# 	cos, sin = self.rotary_emb(value_states, seq_len=max(q_len, kv_seq_len))
+
+# 	query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids_q, position_ids_kv)
+
+# 	key_states = repeat_kv(key_states, self.num_key_value_groups)
+# 	value_states = repeat_kv(value_states, self.num_key_value_groups)
+
+# 	if attention_mask is not None:
+# 		if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
+# 			raise ValueError(
+# 				f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
+# 			)
+
+# 	# SDPA with memory-efficient backend is currently (torch==2.1.2) bugged with non-contiguous inputs with custom attn_mask,
+# 	# Reference: https://github.com/pytorch/pytorch/issues/112577.
+# 	if query_states.device.type == "cuda" and attention_mask is not None:
+# 		query_states = query_states.contiguous()
+# 		key_states = key_states.contiguous()
+# 		value_states = value_states.contiguous()
+
+# 	attn_output = torch.nn.functional.scaled_dot_product_attention(
+# 		query_states,
+# 		key_states,
+# 		value_states,
+# 		attn_mask=attention_mask,
+# 		dropout_p=self.attention_dropout if self.training else 0.0,
+# 		# The q_len > 1 is necessary to match with AttentionMaskConverter.to_causal_4d that does not create a causal mask in case q_len == 1.
+# 		is_causal=self.is_causal and attention_mask is None and q_len > 1,
+# 	)
+
+# 	attn_output = attn_output.transpose(1, 2).contiguous()
+# 	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
+
+# 	attn_output = self.o_proj(attn_output)
+
+# 	return attn_output, None, past_key_value
 
 Qwen2SdpaAttention.forward = Qwen2SdpaAttention_forward
 
-def decoder_forward(
-	self,
-	hidden_states,
-	kv_states,
-	attention_mask = None,
-	position_ids_q = None,
-	position_ids_kv = None,
-	# vision_full = None, 
-	# vision_concise_index = None,
-	# image_token_len_per_side = None,
-	# image_token_len_per_side_concise = None,
-	# vision_full_attention_mask = None,
-	past_key_value = None,
-	output_attentions = False,
-	use_cache = False,
-	**kwargs,):
-		residual = hidden_states
+# def decoder_forward(
+# 	self,
+# 	hidden_states,
+# 	kv_states,
+# 	attention_mask = None,
+# 	position_ids_q = None,
+# 	position_ids_kv = None,
+# 	# vision_full = None, 
+# 	# vision_concise_index = None,
+# 	# image_token_len_per_side = None,
+# 	# image_token_len_per_side_concise = None,
+# 	# vision_full_attention_mask = None,
+# 	past_key_value = None,
+# 	output_attentions = False,
+# 	use_cache = False,
+# 	**kwargs,):
+# 		residual = hidden_states
 
-		hidden_states = self.input_layernorm(hidden_states)
-		kv_states = self.input_layernorm(kv_states)
+# 		hidden_states = self.input_layernorm(hidden_states)
+# 		kv_states = self.input_layernorm(kv_states)
 
-		# Cross Attention
-		hidden_states, self_attn_weights, present_key_value = self.self_attn(
-			hidden_states=hidden_states,
-			kv_states = kv_states,
-			attention_mask=attention_mask,
-			position_ids_q=position_ids_q,
-			position_ids_kv=position_ids_kv,
-			past_key_value=past_key_value,
-			output_attentions=output_attentions,
-			use_cache=use_cache,
-			**kwargs,
-		)
-		hidden_states = residual + hidden_states
+# 		# Cross Attention
+# 		hidden_states, self_attn_weights, present_key_value = self.self_attn(
+# 			hidden_states=hidden_states,
+# 			kv_states = kv_states,
+# 			attention_mask=attention_mask,
+# 			position_ids_q=position_ids_q,
+# 			position_ids_kv=position_ids_kv,
+# 			past_key_value=past_key_value,
+# 			output_attentions=output_attentions,
+# 			use_cache=use_cache,
+# 			**kwargs,
+# 		)
+# 		hidden_states = residual + hidden_states
 
-		# if vision_full is not None:
-		# 	vision_concise = hidden_states[:, vision_concise_index[0]:vision_concise_index[1]]
-		# 	vision_full = self.vision_sampler_layers(vision_full, vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
-		# 	hidden_states = torch.cat([hidden_states, vision_full], 1)
+# 		# if vision_full is not None:
+# 		# 	vision_concise = hidden_states[:, vision_concise_index[0]:vision_concise_index[1]]
+# 		# 	vision_full = self.vision_sampler_layers(vision_full, vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+# 		# 	hidden_states = torch.cat([hidden_states, vision_full], 1)
 
-		# Fully Connected
-		residual = hidden_states
-		hidden_states = self.post_attention_layernorm(hidden_states)
-		hidden_states = self.mlp(hidden_states)
-		hidden_states = residual + hidden_states
+# 		# Fully Connected
+# 		residual = hidden_states
+# 		hidden_states = self.post_attention_layernorm(hidden_states)
+# 		hidden_states = self.mlp(hidden_states)
+# 		hidden_states = residual + hidden_states
 
-		outputs = (hidden_states,)
+# 		outputs = (hidden_states,)
 
-		if output_attentions:
-			outputs += (self_attn_weights,)
+# 		if output_attentions:
+# 			outputs += (self_attn_weights,)
 
-		if use_cache:
-			outputs += (present_key_value,)
+# 		if use_cache:
+# 			outputs += (present_key_value,)
 
-		return outputs
+# 		return outputs
 
-
-def decoder_forward_vision(
-	self,
-	hidden_states_sys,
-	hidden_states_vision_concise,
-	hidden_states_vision_full,
-	hidden_states_text,
-	attention_mask = None,
-	position_ids_sys = None,
-	position_ids_vision_concise = None,
-	position_ids_vision_full = None,
-	position_ids_vision_text = None,
-	image_token_len_per_side = None,
-	image_token_len_per_side_concise = None,
-	vision_full_attention_mask = None,
-	past_key_value = None,
-	output_attentions = False,
-	use_cache = False,
-	**kwargs,):
-		len_sys = hidden_states_sys.shape[1]
-		len_vision_concise = hidden_states_vision_concise.shape[1]
-		len_vision_full = hidden_states_vision_full.shape[1]
-		len_text = hidden_states_text.shape[1]
-
-		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-		residual = hidden_states
-
-		hidden_states = self.input_layernorm(hidden_states)
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(hidden_states, [len_sys, len_vision_concise, len_vision_full, len_text], 1)
-
-		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
-		kv_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-		position_ids_q = torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_text], dim=1)
-		position_ids_kv = torch.cat([position_ids_sys, position_ids_vision_concise, position_ids_vision_full, position_ids_vision_text], dim=1)
-
-		# Cross Attention
-		q_states, self_attn_weights, present_key_value = self.self_attn(
-			hidden_states=q_states,
-			kv_states = kv_states,
-			attention_mask=attention_mask,
-			position_ids_q=position_ids_q,
-			position_ids_kv=position_ids_kv,
-			past_key_value=past_key_value,
-			output_attentions=output_attentions,
-			use_cache=use_cache,
-			**kwargs,
-		)
-
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
-		hidden_states_vision_full = self.vision_sampler_layers.sa(hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
-
-		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-		hidden_states = residual + hidden_states
-
-		# Fully Connected
-		residual = hidden_states
-		hidden_states = self.post_attention_layernorm(hidden_states)
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(hidden_states, [len_sys, len_vision_concise, len_vision_full, len_text], 1)
-
-
-		q_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_text], 1)
-		q_states = self.mlp(q_states)
-		hidden_states_sys, hidden_states_vision_concise, hidden_states_text = torch.split(q_states, [len_sys, len_vision_concise, len_text], 1)
-		hidden_states_vision_full = self.vision_sampler_layers.ffn(hidden_states_vision_full)
-		
-		hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text], 1)
-
-		hidden_states = residual + hidden_states
-
-		outputs = (hidden_states,)
-
-		if output_attentions:
-			outputs += (self_attn_weights,)
-
-		if use_cache:
-			outputs += (present_key_value,)
-
-		return outputs
-
-Qwen2DecoderLayer.forward = decoder_forward
+# Qwen2DecoderLayer.forward = decoder_forward
 
 AutoConfig.register("cambrian_qwen", CambrianConfig)
 AutoModelForCausalLM.register(CambrianConfig, CambrianQwenForCausalLM)
