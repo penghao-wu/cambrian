@@ -529,7 +529,7 @@ def decoder_forward(
 		else:
 			residual = hidden_states
 			hidden_states = self.input_layernorm(hidden_states)
-			kv_states = kv_states
+			kv_states = hidden_states
 
 		# Cross Attention
 		hidden_states, self_attn_weights, present_key_value = self.self_attn(
