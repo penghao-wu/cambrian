@@ -3,20 +3,23 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_2scale_dim448_skip12_24_finetune_737k" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_2scale_layer12_finetune_738k" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
    --model_name_or_path "Qwen/Qwen2-0.5B-Instruct" \
     --version qwen_1_5 \
-    --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
-    --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./cambrian_qwen05b_CLIP_mlp_2scale_dim448_skip12_24_shareGPT4V_pretrain_lr1e4/mm_projector.bin \
+    --data_path ./llava_next_raw_format_processed.jsonl\
+    --image_folder ./llava_next \
+    --pretrain_mm_mlp_adapter ./compressv_qwen05b_CLIP_mlp_2scale_layer12_shareGPT4V_pretrain/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
-    --image_token_len 576 \
-    --image_token_len_concise 36 \
+    --max_num_image_crops 1 \
+    --per_crop_token_len 576 \
+    --compress_reduce_factor 4 \
+    --compress_v True \
+    --compress_v_start_layer 14 \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \
