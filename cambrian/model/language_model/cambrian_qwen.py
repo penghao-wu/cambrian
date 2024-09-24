@@ -122,7 +122,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
 		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
 
-		
+		compress_v = False
 
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
@@ -523,11 +523,9 @@ def decoder_forward(
 	**kwargs,):
 		if fast_vision:
 			residual = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
-			# hidden_states = self.input_layernorm(hidden_states)
+			hidden_states = self.input_layernorm(hidden_states)
 			kv_states = hidden_states
 			hidden_states = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
-			kv_states = self.input_layernorm(kv_states)
-			hidden_states = self.input_layernorm(hidden_states)
 		else:
 			residual = hidden_states
 			hidden_states = self.input_layernorm(hidden_states)
