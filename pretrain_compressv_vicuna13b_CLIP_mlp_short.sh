@@ -3,12 +3,12 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_2scale_layer11_shareGPT4V_pretrain" &&
+export CKPT_NAME="compressv_vicuna13b_CLIP_mlp_2scale_layer14_shareGPT4V_pretrain" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path "lmsys/vicuna-7b-v1.5" \
+    --model_name_or_path "/mnt/disks/storage/llm_ckpts/vicuna1.5" \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
@@ -18,7 +18,7 @@ python cambrian/train/train_tpu.py \
     --per_crop_token_len 576 \
     --compress_reduce_factor 4 \
     --compress_v True \
-    --compress_v_start_layer 11 \
+    --compress_v_start_layer 14 \
     --mm_vision_mlp_lr 1e-4 \
     --num_query_group 1 \
     --query_num_list '[576]' \

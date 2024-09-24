@@ -122,8 +122,6 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
 		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
 
-		compress_v = False
-
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
