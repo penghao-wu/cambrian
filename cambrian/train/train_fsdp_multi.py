@@ -993,6 +993,7 @@ def preprocess(
 
 	return dict(input_ids=input_ids, labels=targets)
 
+
 class LazySupervisedDataset(Dataset):
 	"""Dataset for supervised fine-tuning."""
 
@@ -1048,29 +1049,29 @@ class LazySupervisedDataset(Dataset):
 
 	def _has_image(self, sample: dict) -> bool:
 		return "image" in sample and not str(sample['image']) in ['', 'None', 'none', 'nan']
+	
+	def process_image(self, image_file, overwrite_image_aspect_ratio=None):
+		image_folder = self.data_args.image_folder
+		processor_aux_list = self.data_args.image_processor_aux_list
+		processor = processor_aux_list[0]
+		# print(f"\n\nInspecting the image path, folder = {image_folder}, image={image_file}\n\n")
+		try:
+			image = Image.open(os.path.join(image_folder, image_file)).convert("RGB")
+		except Exception as exn:
+			print(f"Failed to open image {image_file}. Exception:", exn)
+			raise exn
+		image_size = image.size
+		image_aspect_ratio = self.data_args.image_aspect_ratio
+		if overwrite_image_aspect_ratio is not None:
+			image_aspect_ratio = overwrite_image_aspect_ratio
+		if image_aspect_ratio not in ['pad', 'anyres']:
+			raise NotImplementedError("Only pad and anyres is supported for now.")
 
-	def __getitem__(self, i) -> Dict[str, torch.Tensor]:
-		#sources = self.list_data_dict[i]
-
-		with open(self.data_path, 'r') as file:
-			for idx, line in enumerate(file):
-				if idx == i:
-					sources = json.loads(line.strip())
-					break
-		dat = sources
-		if isinstance(i, int):
-			sources = [sources]
-		assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
-		has_image = self._has_image(dat)
-		if has_image:
-			image_file = dat['image']
-			image_folder = self.data_args.image_folder
-			processor_aux_list = self.data_args.image_processor_aux_list
-			try:
-				image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
-			except:
-				return self.__getitem__(0)
-			image_size = image.size
+		image2crops_num = 1
+		if image_aspect_ratio == "anyres":
+			image = process_anyres_image(image, processor, self.data_args.image_grid_pinpoints)
+			image2crops_num = image.shape[0]
+		elif image_aspect_ratio == "pad":
 			def expand2square(pil_img, background_color):
 				width, height = pil_img.size
 				if width == height:
@@ -1078,29 +1079,145 @@ class LazySupervisedDataset(Dataset):
 				elif width > height:
 					result = Image.new(pil_img.mode, (width, width), background_color)
 					result.paste(pil_img, (0, (width - height) // 2))
-					# result.paste(pil_img, (0, 0))
 					return result
 				else:
 					result = Image.new(pil_img.mode, (height, height), background_color)
 					result.paste(pil_img, ((height - width) // 2, 0))
-					# result.paste(pil_img, (0, 0))
 					return result
-			if self.data_args.image_aspect_ratio != 'pad':
-				raise NotImplementedError("Only pad is supported for now.")
-			
-			image_aux_list = []
-			for processor_aux in processor_aux_list:
-				image_aux = image
-				target_resolution = processor_aux.crop_size['height']
-				image_aux =  expand2square(image_aux, tuple(int(x*255) for x in processor_aux.image_mean)).resize((target_resolution, target_resolution))
-				image_aux = processor_aux.preprocess(image_aux, return_tensors='pt')['pixel_values'][0]
-				image_aux_list.append(image_aux)
+			image = expand2square(image, tuple(int(x * 255) for x in processor.image_mean))
+			image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
+			image = image.unsqueeze(0)
+		return image, image_size, image2crops_num
+	
+	def __getitem__(self, i) -> Dict[str, torch.Tensor]:
+		# TODO: define number of retries somewhere else
+		num_base_retries = 3
+		num_final_retries = 300
 
+		# try the current sample first
+		for attempt_idx in range(num_base_retries):
+			try:
+				sample = self._get_item(i)
+				return sample
+			except Exception as e:
+				# sleep 1s in case it is a cloud disk issue
+				print(f"[Try #{attempt_idx}] Failed to fetch sample {i}. Exception:", e)
+				time.sleep(1)
+
+		# try other samples, in case it is file corruption issue
+		for attempt_idx in range(num_base_retries):
+			try:
+				next_index = min(i + 1, len(self.lengths) - 1)
+				# sample_idx = random.choice(range(len(self)))
+				sample = self._get_item(next_index)
+				return sample
+			except Exception as e:
+				# no need to sleep
+				print(f"[Try other #{attempt_idx}] Failed to fetch sample {next_index}. Exception:", e)
+				pass
+
+		try:
+			sample = self._get_item(i)
+			return sample
+		except Exception as e:
+			raise e
+
+	def _get_item(self, i) -> Dict[str, torch.Tensor]:
+		#sources = self.list_data_dict[i]
+		with open(self.data_path, 'r') as file:
+			for idx, line in enumerate(file):
+				if idx == i:
+					sources = json.loads(line.strip())
+					break
+		# sources = {"id":"000000398214","image":"coco/train2017/000000398214.jpg","conversations":[{"from":"human","value":"What is it\n<image>"},{"from":"gpt","value":"City"}]}
+		dat = sources
+		if isinstance(i, int):
+			sources = [sources]
+		assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
+		has_image = self._has_image(dat)
+
+		images = []
+		# for a anyres image, we treat each crop as a single image and we need to repeat the <image>, so we record this value here
+		image2crops_nums = []
+		if has_image:
+			image_file = dat['image']
+			if type(image_file) is list:
+				if len(image_file) > 1:
+					image = [self.process_image(f, "pad") for f in image_file]
+				else:
+					image = [self.process_image(f) for f in image_file]
+			else:
+				image = [self.process_image(image_file)]
+
+			images = torch.cat([img[0] for img in image])
+			image2crops_nums = [img[2] for img in image]
+			sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
+
+		elif "video" in sources[0]:
+			video_file = dat["video"]
+			video_folder = self.data_args.video_folder
+			video_file = os.path.join(video_folder, video_file)
+			suffix = video_file.split(".")[-1]
+			if not os.path.exists(video_file):
+				print("File {} not exist!".format(video_file))
+
+			try:
+				if "shareVideoGPTV" in video_file:
+					frame_files = [os.path.join(video_file, f) for f in os.listdir(video_file) if os.path.isfile(os.path.join(video_file, f))]
+					frame_files.sort()  # Ensure the frames are sorted if they are named sequentially
+
+					# TODO: Hard CODE: Determine the indices for uniformly sampling 10 frames
+					if self.data_args.force_sample:
+						num_frames_to_sample = self.data_args.frames_upbound
+					else:
+						num_frames_to_sample = 10
+
+					avg_fps = 2
+					
+					total_frames = len(frame_files)
+					sampled_indices = np.linspace(0, total_frames - 1, num_frames_to_sample, dtype=int)
+
+
+					frame_time = [i/2 for i in sampled_indices]
+					frame_time = ",".join([f"{i:.2f}s" for i in frame_time])
+
+					video_time = total_frames / avg_fps
+
+					# Read and store the sampled frames
+					video = []
+					for idx in sampled_indices:
+						frame_path = frame_files[idx]
+						try:
+							with Image.open(frame_path) as img:
+								frame = img.convert("RGB")
+								video.append(frame)
+						except IOError:
+							print(f"Failed to read frame at path: {frame_path}")
+				else:
+					video, video_time, frame_time, num_frames_to_sample = process_video_with_decord(video_file, self.data_args)
+
+				processor = self.data_args.image_processor
+				image = processor.preprocess(video, return_tensors="pt")["pixel_values"]
+				if self.data_args.add_time_instruction:
+					time_instruciton = f"The video lasts for {video_time:.2f} seconds, and {num_frames_to_sample} frames are uniformly sampled from it. These frames are located at {frame_time}.Please answer the following questions related to this video."
+					sources[0]["conversations"][0]["value"] = f'{DEFAULT_IMAGE_TOKEN}\n{time_instruciton}\n{sources[0]["conversations"][0]["value"].replace(DEFAULT_IMAGE_TOKEN, "")}'
+				image = [(image, video[0].size, "video")]
+				images = torch.cat([img[0] for img in image])
+				image2crops_nums = [1] * images.shape[0]
+				sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
+				# print(sources)
+			except Exception as e:
+				print(f"Error: {e}")
+				print(f"Failed to read video file: {video_file}")
+				return self._get_item(i + 1)
 			sources = preprocess_multimodal(
 				copy.deepcopy([e["conversations"] for e in sources]),
 				self.data_args)
 		else:
 			sources = copy.deepcopy([e["conversations"] for e in sources])
+
+		has_image = has_image or "video" in sources[0]
+
 		data_dict = preprocess(
 			sources,
 			self.tokenizer,
@@ -1109,283 +1226,32 @@ class LazySupervisedDataset(Dataset):
 			data_dict = dict(input_ids=data_dict["input_ids"][0],
 							 labels=data_dict["labels"][0])
 		if (data_dict['labels']!=IGNORE_INDEX).sum()==0:
-			return self.__getitem__(0)
-		data_dict['image2crops_nums'] = [1]
+			return self._get_item(i+1)
+		
+		# check whether image tokens will be truncated, if so, discard this sample
+		if has_image or self.data_args.is_multimodal:    
+			max_num_image_crops = self.data_args.max_num_image_crops
+			per_crop_token_len = self.data_args.per_crop_token_len
+			num_images = (data_dict['input_ids'] == IMAGE_TOKEN_INDEX).sum()
+			if num_images == 0:
+				pre_text_token_num = 0
+			else:
+				last_image_token_index = torch.where(data_dict['input_ids'] == IMAGE_TOKEN_INDEX)[0].tolist()[-1]
+				pre_text_token_num = (last_image_token_index+1) - num_images
+
+			if pre_text_token_num + (max_num_image_crops*(per_crop_token_len+1)) >= self.tokenizer.model_max_length-1:
+				print("Skip this sample as its image tokens padded get truncated")
+				return self._get_item(i + 1)
+
 		# image exist in the data
 		if has_image:
-			data_dict['image_aux_list'] = image_aux_list
+			data_dict['images'] = images
 		elif self.data_args.is_multimodal:
 			# image does not exist in the data, but the model is multimodal
-			crop_size = 336
-			processor_aux_list = self.data_args.image_processor_aux_list
-			data_dict['image_aux_list'] = [torch.zeros(3, processor_aux.crop_size['height'], processor_aux.crop_size['width']) for processor_aux in processor_aux_list]
-			image_size = (crop_size, crop_size)
-			data_dict['image2crops_nums'] = []
-		data_dict['image_size'] = image_size
-
-		data_dict['images'] = data_dict['image_aux_list'][0].unsqueeze(0)
-		
-
+			processor = self.data_args.image_processor_aux_list[0]
+			data_dict['images'] = torch.zeros(self.data_args.max_num_image_crops, 3, processor.crop_size['height'], processor.crop_size['width'])
+		data_dict['image2crops_nums'] = image2crops_nums
 		return data_dict
-
-# class LazySupervisedDataset(Dataset):
-# 	"""Dataset for supervised fine-tuning."""
-
-# 	def __init__(self, data_path: str,
-# 				 tokenizer: transformers.PreTrainedTokenizer,
-# 				 data_args: DataArguments):
-# 		super(LazySupervisedDataset, self).__init__()
-
-# 		self.tokenizer = tokenizer
-# 		self.data_path = data_path
-# 		self.data_args = data_args
-# 		self.length = self._get_length()
-
-# 	def _get_length(self):
-# 		"""Calculates the number of samples in the .jsonl file."""
-# 		with open(self.data_path, 'r') as file:
-# 			for i, _ in enumerate(file):
-# 				pass
-# 		return i + 1
-
-# 	def __len__(self):
-# 		"""Returns the number of samples in the dataset."""
-# 		return self.length
-
-
-# 	def _compute_lengths(self):
-# 		"""Compute and cache lengths of conversations in the dataset."""
-# 		if hasattr(self, 'length_list') and hasattr(self, 'modality_length_list'):
-# 			# Return cached values if already computed
-# 			return self.length_list, self.modality_length_list
-
-# 		self.length_list = []
-# 		self.modality_length_list = []
-# 		with open(self.data_path, 'r') as file:
-# 			for line in file:
-# 				sample = json.loads(line.strip())
-# 				img_tokens = 128 if self._has_image(sample) else 0
-# 				cur_len = sum(len(conv['value'].split()) for conv in sample['conversations'])
-# 				self.length_list.append(cur_len + img_tokens)
-# 				modality_len = cur_len if 'image' in sample else -cur_len
-# 				self.modality_length_list.append(modality_len)
-# 		return self.length_list, self.modality_length_list
-
-# 	@property
-# 	def lengths(self):
-# 		length_list, _ = self._compute_lengths()
-# 		return length_list
-
-# 	@property
-# 	def modality_lengths(self):
-# 		_, modality_length_list = self._compute_lengths()
-# 		return modality_length_list
-
-# 	def _has_image(self, sample: dict) -> bool:
-# 		return "image" in sample and not str(sample['image']) in ['', 'None', 'none', 'nan']
-	
-# 	def process_image(self, image_file, overwrite_image_aspect_ratio=None):
-# 		image_folder = self.data_args.image_folder
-# 		processor_aux_list = self.data_args.image_processor_aux_list
-# 		processor = processor_aux_list[0]
-# 		# print(f"\n\nInspecting the image path, folder = {image_folder}, image={image_file}\n\n")
-# 		try:
-# 			image = Image.open(os.path.join(image_folder, image_file)).convert("RGB")
-# 		except Exception as exn:
-# 			print(f"Failed to open image {image_file}. Exception:", exn)
-# 			raise exn
-# 		image_size = image.size
-# 		image_aspect_ratio = self.data_args.image_aspect_ratio
-# 		if overwrite_image_aspect_ratio is not None:
-# 			image_aspect_ratio = overwrite_image_aspect_ratio
-# 		if image_aspect_ratio not in ['pad', 'anyres']:
-# 			raise NotImplementedError("Only pad and anyres is supported for now.")
-
-# 		image2crops_num = 1
-# 		if image_aspect_ratio == "anyres":
-# 			image = process_anyres_image(image, processor, self.data_args.image_grid_pinpoints)
-# 			image2crops_num = image.shape[0]
-# 		elif image_aspect_ratio == "pad":
-# 			def expand2square(pil_img, background_color):
-# 				width, height = pil_img.size
-# 				if width == height:
-# 					return pil_img
-# 				elif width > height:
-# 					result = Image.new(pil_img.mode, (width, width), background_color)
-# 					result.paste(pil_img, (0, (width - height) // 2))
-# 					return result
-# 				else:
-# 					result = Image.new(pil_img.mode, (height, height), background_color)
-# 					result.paste(pil_img, ((height - width) // 2, 0))
-# 					return result
-# 			image = expand2square(image, tuple(int(x * 255) for x in processor.image_mean))
-# 			image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
-# 			image = image.unsqueeze(0)
-# 		return image, image_size, image2crops_num
-	
-# 	def __getitem__(self, i) -> Dict[str, torch.Tensor]:
-# 		# TODO: define number of retries somewhere else
-# 		num_base_retries = 3
-# 		num_final_retries = 300
-
-# 		# try the current sample first
-# 		for attempt_idx in range(num_base_retries):
-# 			try:
-# 				sample = self._get_item(i)
-# 				return sample
-# 			except Exception as e:
-# 				# sleep 1s in case it is a cloud disk issue
-# 				print(f"[Try #{attempt_idx}] Failed to fetch sample {i}. Exception:", e)
-# 				time.sleep(1)
-
-# 		# try other samples, in case it is file corruption issue
-# 		for attempt_idx in range(num_base_retries):
-# 			try:
-# 				next_index = min(i + 1, len(self.lengths) - 1)
-# 				# sample_idx = random.choice(range(len(self)))
-# 				sample = self._get_item(next_index)
-# 				return sample
-# 			except Exception as e:
-# 				# no need to sleep
-# 				print(f"[Try other #{attempt_idx}] Failed to fetch sample {next_index}. Exception:", e)
-# 				pass
-
-# 		try:
-# 			sample = self._get_item(i)
-# 			return sample
-# 		except Exception as e:
-# 			raise e
-
-# 	def _get_item(self, i) -> Dict[str, torch.Tensor]:
-# 		#sources = self.list_data_dict[i]
-# 		with open(self.data_path, 'r') as file:
-# 			for idx, line in enumerate(file):
-# 				if idx == i:
-# 					sources = json.loads(line.strip())
-# 					break
-# 		# sources = {"id":"000000398214","image":"coco/train2017/000000398214.jpg","conversations":[{"from":"human","value":"What is it\n<image>"},{"from":"gpt","value":"City"}]}
-# 		dat = sources
-# 		if isinstance(i, int):
-# 			sources = [sources]
-# 		assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
-# 		has_image = self._has_image(dat)
-
-# 		images = []
-# 		# for a anyres image, we treat each crop as a single image and we need to repeat the <image>, so we record this value here
-# 		image2crops_nums = []
-# 		if has_image:
-# 			image_file = dat['image']
-# 			if type(image_file) is list:
-# 				if len(image_file) > 1:
-# 					image = [self.process_image(f, "pad") for f in image_file]
-# 				else:
-# 					image = [self.process_image(f) for f in image_file]
-# 			else:
-# 				image = [self.process_image(image_file)]
-
-# 			images = torch.cat([img[0] for img in image])
-# 			image2crops_nums = [img[2] for img in image]
-# 			sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
-
-# 		elif "video" in sources[0]:
-# 			video_file = dat["video"]
-# 			video_folder = self.data_args.video_folder
-# 			video_file = os.path.join(video_folder, video_file)
-# 			suffix = video_file.split(".")[-1]
-# 			if not os.path.exists(video_file):
-# 				print("File {} not exist!".format(video_file))
-
-# 			try:
-# 				if "shareVideoGPTV" in video_file:
-# 					frame_files = [os.path.join(video_file, f) for f in os.listdir(video_file) if os.path.isfile(os.path.join(video_file, f))]
-# 					frame_files.sort()  # Ensure the frames are sorted if they are named sequentially
-
-# 					# TODO: Hard CODE: Determine the indices for uniformly sampling 10 frames
-# 					if self.data_args.force_sample:
-# 						num_frames_to_sample = self.data_args.frames_upbound
-# 					else:
-# 						num_frames_to_sample = 10
-
-# 					avg_fps = 2
-					
-# 					total_frames = len(frame_files)
-# 					sampled_indices = np.linspace(0, total_frames - 1, num_frames_to_sample, dtype=int)
-
-
-# 					frame_time = [i/2 for i in sampled_indices]
-# 					frame_time = ",".join([f"{i:.2f}s" for i in frame_time])
-
-# 					video_time = total_frames / avg_fps
-
-# 					# Read and store the sampled frames
-# 					video = []
-# 					for idx in sampled_indices:
-# 						frame_path = frame_files[idx]
-# 						try:
-# 							with Image.open(frame_path) as img:
-# 								frame = img.convert("RGB")
-# 								video.append(frame)
-# 						except IOError:
-# 							print(f"Failed to read frame at path: {frame_path}")
-# 				else:
-# 					video, video_time, frame_time, num_frames_to_sample = process_video_with_decord(video_file, self.data_args)
-
-# 				processor = self.data_args.image_processor
-# 				image = processor.preprocess(video, return_tensors="pt")["pixel_values"]
-# 				if self.data_args.add_time_instruction:
-# 					time_instruciton = f"The video lasts for {video_time:.2f} seconds, and {num_frames_to_sample} frames are uniformly sampled from it. These frames are located at {frame_time}.Please answer the following questions related to this video."
-# 					sources[0]["conversations"][0]["value"] = f'{DEFAULT_IMAGE_TOKEN}\n{time_instruciton}\n{sources[0]["conversations"][0]["value"].replace(DEFAULT_IMAGE_TOKEN, "")}'
-# 				image = [(image, video[0].size, "video")]
-# 				images = torch.cat([img[0] for img in image])
-# 				image2crops_nums = [1] * images.shape[0]
-# 				sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
-# 				# print(sources)
-# 			except Exception as e:
-# 				print(f"Error: {e}")
-# 				print(f"Failed to read video file: {video_file}")
-# 				return self._get_item(i + 1)
-# 			sources = preprocess_multimodal(
-# 				copy.deepcopy([e["conversations"] for e in sources]),
-# 				self.data_args)
-# 		else:
-# 			sources = copy.deepcopy([e["conversations"] for e in sources])
-
-# 		has_image = has_image or "video" in sources[0]
-
-# 		data_dict = preprocess(
-# 			sources,
-# 			self.tokenizer,
-# 			has_image=has_image)
-# 		if isinstance(i, int):
-# 			data_dict = dict(input_ids=data_dict["input_ids"][0],
-# 							 labels=data_dict["labels"][0])
-# 		if (data_dict['labels']!=IGNORE_INDEX).sum()==0:
-# 			return self._get_item(i+1)
-		
-# 		# check whether image tokens will be truncated, if so, discard this sample
-# 		if has_image or self.data_args.is_multimodal:    
-# 			max_num_image_crops = self.data_args.max_num_image_crops
-# 			per_crop_token_len = self.data_args.per_crop_token_len
-# 			num_images = (data_dict['input_ids'] == IMAGE_TOKEN_INDEX).sum()
-# 			if num_images == 0:
-# 				pre_text_token_num = 0
-# 			else:
-# 				last_image_token_index = torch.where(data_dict['input_ids'] == IMAGE_TOKEN_INDEX)[0].tolist()[-1]
-# 				pre_text_token_num = (last_image_token_index+1) - num_images
-
-# 			if pre_text_token_num + (max_num_image_crops*(per_crop_token_len+1)) >= self.tokenizer.model_max_length-1:
-# 				print("Skip this sample as its image tokens padded get truncated")
-# 				return self._get_item(i + 1)
-
-# 		# image exist in the data
-# 		if has_image:
-# 			data_dict['images'] = images
-# 		elif self.data_args.is_multimodal:
-# 			# image does not exist in the data, but the model is multimodal
-# 			processor = self.data_args.image_processor_aux_list[0]
-# 			data_dict['images'] = torch.zeros(self.data_args.max_num_image_crops, 3, processor.crop_size['height'], processor.crop_size['width'])
-# 		data_dict['image2crops_nums'] = image2crops_nums
-# 		return data_dict
 
 def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, dummy_num=1, max_length=2048):
 	height = width = int(per_crop_token_len**0.5)
@@ -1477,7 +1343,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 
 			labels_image_full.append(torch.full((max_num_image_crops*per_crop_token_len,), IGNORE_INDEX, dtype=torch.long))
 			labels_newline_full.append(torch.full((max_num_image_crops,), IGNORE_INDEX, dtype=torch.long))
-			labels_text.append(cur_labels)
+			labels_text.append(torch.cat([cur_labels[1:], torch.full((1, ), IGNORE_INDEX,  dtype=torch.long)]))
 
 			continue
 
