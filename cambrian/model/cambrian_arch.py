@@ -424,9 +424,6 @@ class CambrianMetaForCausalLM(ABC):
             #     self.model.image_newline[None, None, None, :].expand(image_features.shape[0], final_height, 1, -1)
             # ), dim=2)
             image_features = image_features.flatten(1, 2)
-            data_dict = {'image_feature':image_features.detach().cpu()}
-            torch.save(data_dict, 'data_main.pth' )
-            assert False
             image_features = torch.cat((
                 image_features,
                 self.model.image_newline[None, None, :].expand(image_features.shape[0], 1, -1)
