@@ -273,7 +273,6 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 				input_ids,
 				images,
 			)
-			import code; code.interact(local=locals())
 		if IS_XLA_AVAILABLE:
 			# Very Important for TorchXLA
 			#self.model.gradient_checkpointing = False
