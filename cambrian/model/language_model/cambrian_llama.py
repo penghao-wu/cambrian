@@ -117,7 +117,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		hidden_states_image_full = hidden_states[:, :len_image_full]
 		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
 		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
-		print(3333, hidden_states[0, :576])
+
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
@@ -267,7 +267,6 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 				input_ids,
 				images,
 			)
-			print(2222, inputs_embeds[0, :576])
 		if IS_XLA_AVAILABLE:
 			# Very Important for TorchXLA
 			#self.model.gradient_checkpointing = False
