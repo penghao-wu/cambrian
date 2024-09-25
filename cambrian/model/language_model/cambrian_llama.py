@@ -123,7 +123,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
-
+			print(layer_i, hidden_states[0, 622:])
 			if not compress_v or layer_i < compress_v_start_layer:
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
