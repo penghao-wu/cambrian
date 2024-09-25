@@ -1129,7 +1129,7 @@ class LazySupervisedDataset(Dataset):
 				if idx == i:
 					sources = json.loads(line.strip())
 					break
-		# sources = {"id":"000000398214","image":"coco/train2017/000000398214.jpg","conversations":[{"from":"human","value":"What is it\n<image>"},{"from":"gpt","value":"City"}]}
+		sources = {"id":"000000398214","image":"coco/train2017/000000398214.jpg","conversations":[{"from":"human","value":"What is it\n<image>"},{"from":"gpt","value":"City"}]}
 		dat = sources
 		if isinstance(i, int):
 			sources = [sources]
