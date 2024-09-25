@@ -356,10 +356,10 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			loss_fct = CrossEntropyLoss()
 			shift_logits = shift_logits.view(-1, self.config.vocab_size)
 			shift_labels = shift_labels.view(-1)
-			assert False, shift_labels[576:]
 			# Enable model parallelism
 			shift_labels = shift_labels.to(shift_logits.device)
 			loss = loss_fct(shift_logits, shift_labels)
+			assert False, (shift_labels[576:], loss)
 
 		if not return_dict:
 			output = (logits,) + outputs[1:]
