@@ -64,19 +64,21 @@ def get_image_compress(hidden_states_image_full, compress_reduce_factor, per_cro
 	hidden_states_image_compress = hidden_states_image_compress.permute(0, 2, 3, 1).contiguous().view(bs, num_image_crops*h_compress*w_compress, -1)
 	return hidden_states_image_compress
 
-def reorg(tensor, position_ids, attention_mask):
-    # tensor_shape: B * L *C
-    # attention_mask_shape B * 1 * L * L
-    tensor_reorg = torch.cat([tensor[:, 577:577+35], tensor[:, :577], tensor[:, 577+35:]], 1)
-    position_ids_reorg = torch.cat([position_ids[:, 577:577+35], position_ids[:, :577], position_ids[:, 577+35:]], 1)
-    attention_mask_reorg = torch.cat([attention_mask[:, :, 577:577+35, :], 
-                                      attention_mask[:, :, :577, :], 
-                                      attention_mask[:, :, 577+35:, :]], 2)
+def reorg(tensor, position_ids=None, attention_mask=None):
+	# tensor_shape: B * L *C
+	# attention_mask_shape B * 1 * L * L
+	tensor_reorg = torch.cat([tensor[:, 577:577+35], tensor[:, :577], tensor[:, 577+35:]], 1).contiguous()
+	if position_ids is None:
+		return tensor_reorg
+	position_ids_reorg = torch.cat([position_ids[:, 577:577+35], position_ids[:, :577], position_ids[:, 577+35:]], 1).contiguous()
+	attention_mask_reorg = torch.cat([attention_mask[:, :, 577:577+35, :], 
+									  attention_mask[:, :, :577, :], 
+									  attention_mask[:, :, 577+35:, :]], 2)
 
-    attention_mask_reorg = torch.cat([attention_mask_reorg[:, :, :, 577:577+35], 
-                                      attention_mask_reorg[:, :, :, :577], 
-                                      attention_mask_reorg[:, :, :, 577+35:]], 3)
-    return tensor_reorg, position_ids_reorg, attention_mask_reorg
+	attention_mask_reorg = torch.cat([attention_mask_reorg[:, :, :, 577:577+35], 
+									  attention_mask_reorg[:, :, :, :577], 
+									  attention_mask_reorg[:, :, :, 577+35:]], 3).contiguous()
+	return tensor_reorg, position_ids_reorg, attention_mask_reorg
 
 class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 	config_class = CambrianConfig
@@ -361,6 +363,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			# Shift so that tokens < n predict n
 			# shift_logits = logits[..., :-1, :].contiguous()
 			# shift_labels = labels[..., 1:].contiguous()
+			labels = reorg(labels)
 			shift_logits = logits
 			shift_labels = labels
 			# Flatten the tokens
