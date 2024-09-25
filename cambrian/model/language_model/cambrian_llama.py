@@ -125,7 +125,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
 				
-				cur_attention_mask = attention_mask_regular_4d
+			cur_attention_mask = attention_mask_regular_4d
 
 			if self.gradient_checkpointing and self.training:
 				layer_outputs = self._gradient_checkpointing_func(
