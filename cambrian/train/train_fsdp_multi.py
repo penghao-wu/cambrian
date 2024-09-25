@@ -1029,7 +1029,7 @@ class LazySupervisedDataset(Dataset):
 		with open(self.data_path, 'r') as file:
 			for line in file:
 				sample = json.loads(line.strip())
-				img_tokens = self.data_args.image_token_len if self._has_image(sample) else 0
+				img_tokens = 128 if self._has_image(sample) else 0
 				cur_len = sum(len(conv['value'].split()) for conv in sample['conversations'])
 				self.length_list.append(cur_len + img_tokens)
 				modality_len = cur_len if 'image' in sample else -cur_len
