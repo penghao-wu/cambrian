@@ -1132,32 +1132,62 @@ def get_padding_offset(cur_size, original_size):
         return padding, padding, 0, 0
 
 
+# def prepare_image_info(image_size, image_token_len, newline=False):
+#     num_tokens_per_side = int(image_token_len**0.5)
+#     if newline:
+#         # for the newline embedding
+#         attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side+1, dtype=torch.bool)
+#     else:
+#         attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side, dtype=torch.bool)
+#     left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((num_tokens_per_side, num_tokens_per_side), image_size)
+#     if newline:
+#         if left_offset > 0:
+#             attention_mask[:, :left_offset] = 0
+#         if right_offset > 0:
+#             attention_mask[:, -right_offset-1:-1] = 0
+#         if top_offset > 0:
+#             attention_mask[:top_offset, :]=0
+#         if bottom_offset > 0:
+#             attention_mask[-bottom_offset:, :] = 0
+#     else:
+#         if left_offset > 0:
+#             attention_mask[:, :left_offset] = 0
+#         if right_offset > 0:
+#             attention_mask[:, -right_offset:] = 0
+#         if top_offset > 0:
+#             attention_mask[:top_offset, :]=0
+#         if bottom_offset > 0:
+#             attention_mask[-bottom_offset:, :] = 0
+#     attention_mask = attention_mask.flatten()
+#     position_ids = attention_mask.cumsum(0)-1
+#     return attention_mask, position_ids
+
 def prepare_image_info(image_size, image_token_len, newline=False):
     num_tokens_per_side = int(image_token_len**0.5)
     if newline:
         # for the newline embedding
-        attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side+1, dtype=torch.bool)
+        attention_mask = torch.ones(num_tokens_per_side * num_tokens_per_side+1, dtype=torch.bool)
     else:
         attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side, dtype=torch.bool)
     left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((num_tokens_per_side, num_tokens_per_side), image_size)
-    if newline:
-        if left_offset > 0:
-            attention_mask[:, :left_offset] = 0
-        if right_offset > 0:
-            attention_mask[:, -right_offset-1:-1] = 0
-        if top_offset > 0:
-            attention_mask[:top_offset, :]=0
-        if bottom_offset > 0:
-            attention_mask[-bottom_offset:, :] = 0
-    else:
-        if left_offset > 0:
-            attention_mask[:, :left_offset] = 0
-        if right_offset > 0:
-            attention_mask[:, -right_offset:] = 0
-        if top_offset > 0:
-            attention_mask[:top_offset, :]=0
-        if bottom_offset > 0:
-            attention_mask[-bottom_offset:, :] = 0
+    # if newline:
+    #     if left_offset > 0:
+    #         attention_mask[:, :left_offset] = 0
+    #     if right_offset > 0:
+    #         attention_mask[:, -right_offset-1:-1] = 0
+    #     if top_offset > 0:
+    #         attention_mask[:top_offset, :]=0
+    #     if bottom_offset > 0:
+    #         attention_mask[-bottom_offset:, :] = 0
+    # else:
+    #     if left_offset > 0:
+    #         attention_mask[:, :left_offset] = 0
+    #     if right_offset > 0:
+    #         attention_mask[:, -right_offset:] = 0
+    #     if top_offset > 0:
+    #         attention_mask[:top_offset, :]=0
+    #     if bottom_offset > 0:
+    #         attention_mask[-bottom_offset:, :] = 0
     attention_mask = attention_mask.flatten()
     position_ids = attention_mask.cumsum(0)-1
     return attention_mask, position_ids
@@ -1205,7 +1235,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
             
             if i < len(image_token_indices) - 2:
                 num_tokens_per_side = int(image_token_len**0.5)
-                image_token_len_with_newline = image_token_len + num_tokens_per_side
+                # image_token_len_with_newline = image_token_len + num_tokens_per_side
+                image_token_len_with_newline = image_token_len + 1
                 cur_input_ids_im_replaced.append(torch.full((image_token_len_with_newline-1,), 0, device=cur_input_ids.device, dtype=cur_input_ids.dtype))
                 cur_labels_im_replaced.append(torch.full((image_token_len_with_newline,), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
 
@@ -1228,7 +1259,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
                     index = cur_im_position_ids.max()+1
                 else:
                     num_tokens_per_side = int(image_token_len**0.5)
-                    image_token_len_with_newline = image_token_len + num_tokens_per_side
+                    # image_token_len_with_newline = image_token_len + num_tokens_per_side
+                    image_token_len_with_newline = image_token_len + 1
                     cur_attention_mask_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_attention_mask.device, dtype=cur_attention_mask.dtype))
                     cur_position_ids_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_input_ids.device, dtype=torch.long))
         
