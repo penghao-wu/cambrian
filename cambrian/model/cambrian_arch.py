@@ -341,9 +341,6 @@ class CambrianMetaForCausalLM(ABC):
         image_aux_features_list = []
         for image_aux, vision_tower_aux in zip(image_aux_list, vision_tower_aux_list):
             image_aux_features = vision_tower_aux(image_aux)
-            data_dict = {'image':image_aux.detach().cpu(), 'image_feature':image_aux_features.detach().cpu()}
-            torch.save(data_dict, 'data_main.pth' )
-            assert False
             image_aux_features_list.append(image_aux_features)
         return image_aux_features_list
 
@@ -427,6 +424,9 @@ class CambrianMetaForCausalLM(ABC):
             #     self.model.image_newline[None, None, None, :].expand(image_features.shape[0], final_height, 1, -1)
             # ), dim=2)
             image_features = image_features.flatten(1, 2)
+            data_dict = {'image_feature':image_features.detach().cpu()}
+            torch.save(data_dict, 'data_main.pth' )
+            assert False
             image_features = torch.cat((
                 image_features,
                 self.model.image_newline[None, None, :].expand(image_features.shape[0], 1, -1)
