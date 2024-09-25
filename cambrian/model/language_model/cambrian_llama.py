@@ -173,7 +173,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
-
+			print(i, hidden_states[0, 622:])
 			if i in skip_layers:
 				cur_attention_mask = ee_attention_mask
 			else:
