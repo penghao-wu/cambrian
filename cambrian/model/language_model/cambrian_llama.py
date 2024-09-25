@@ -179,6 +179,10 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 			else:
 				cur_attention_mask = attention_mask
 
+			data_dict = {"hidden_states":hidden_states.detach().cpu(), "cur_attention_mask":cur_attention_mask.detach().cpu(), "position_ids":position_ids.detach().cpu()}
+			torch.save(data_dict, 'data_main.npy')
+			assert False
+
 			if self.gradient_checkpointing and self.training:
 				layer_outputs = self._gradient_checkpointing_func(
 					decoder_layer.__call__,
@@ -201,7 +205,6 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 			hidden_states = layer_outputs[0]
 
-			print(i, hidden_states[0, 35 + 575])
 			# vision_tokens = self.vision_sampler_layers[i](vision_tokens)
 
 			# hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :] = vision_tokens
@@ -306,7 +309,6 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				all_self_attns += (layer_outputs[1],)
 
 		hidden_states = self.norm(hidden_states)
-		assert False, hidden_states[0, 35 + 575]
 		# add hidden states from the last decoder layer
 		if output_hidden_states:
 			all_hidden_states += (hidden_states,)
