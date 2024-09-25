@@ -64,6 +64,20 @@ def get_image_compress(hidden_states_image_full, compress_reduce_factor, per_cro
 	hidden_states_image_compress = hidden_states_image_compress.permute(0, 2, 3, 1).contiguous().view(bs, num_image_crops*h_compress*w_compress, -1)
 	return hidden_states_image_compress
 
+def reorg(tensor, position_ids, attention_mask):
+    # tensor_shape: B * L *C
+    # attention_mask_shape B * 1 * L * L
+    tensor_reorg = torch.cat([tensor[:, 577:577+35], tensor[:, :577], tensor[:, 577+35:]], 1)
+    position_ids_reorg = torch.cat([position_ids[:, 577:577+35], position_ids[:, :577], position_ids[:, 577+35:]], 1)
+    attention_mask_reorg = torch.cat([attention_mask[:, :, 577:577+35, :], 
+                                      attention_mask[:, :, :577, :], 
+                                      attention_mask[:, :, 577+35:, :]], 2)
+
+    attention_mask_reorg = torch.cat([attention_mask_reorg[:, :, :, 577:577+35], 
+                                      attention_mask_reorg[:, :, :, :577], 
+                                      attention_mask_reorg[:, :, :, 577+35:]], 3)
+    return tensor_reorg, position_ids_reorg, attention_mask_reorg
+
 class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 	config_class = CambrianConfig
 
@@ -117,6 +131,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		hidden_states_image_full = hidden_states[:, :len_image_full]
 		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
 		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
+
+		hidden_states, position_ids, attention_mask_regular_4d = reorg(hidden_states, position_ids, attention_mask_regular_4d)
 
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
@@ -354,7 +370,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			# Enable model parallelism
 			shift_labels = shift_labels.to(shift_logits.device)
 			loss = loss_fct(shift_logits, shift_labels)
-			assert False, (shift_labels[622:], loss, shift_logits[622:], (shift_labels!=-100).sum())
+			assert False, (shift_labels[622:], loss, shift_logits[622:])
 
 		if not return_dict:
 			output = (logits,) + outputs[1:]
