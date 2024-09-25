@@ -1365,7 +1365,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 		image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
 		position_id_count = 0
 		for i in range(len(image_token_indices) - 1):
-			# prepare everything fot the text part
+			# prepare everything for the text part
 			cur_len_text = image_token_indices[i+1] - (image_token_indices[i]+1)
 			if cur_len_text > 0:
 				cur_input_ids_text.append(cur_input_ids[image_token_indices[i]+1:image_token_indices[i+1]])
