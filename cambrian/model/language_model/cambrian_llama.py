@@ -200,6 +200,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				)
 
 			hidden_states = layer_outputs[0]
+
+			print(i, hidden_states[0, 35 + 575])
 			# vision_tokens = self.vision_sampler_layers[i](vision_tokens)
 
 			# hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :] = vision_tokens
