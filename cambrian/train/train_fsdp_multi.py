@@ -1492,8 +1492,6 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 	# others can't see compress
 	attention_mask_compress_4d[:, :, len_image_compress:, :len_image_compress] = min_dtype
 
-	import code; code.interact(local=locals())
-
 	return input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, attention_mask_regular_4d, attention_mask_compress_4d
 
 
