@@ -155,6 +155,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 					)
 				
 				hidden_states = layer_outputs[0]
+
+				assert False, hidden_states[0, 575]
 							
 			else:
 				if layer_i == compress_v_start_layer:
