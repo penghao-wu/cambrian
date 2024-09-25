@@ -1110,6 +1110,7 @@ class LazySupervisedDataset(Dataset):
 							 labels=data_dict["labels"][0])
 		if (data_dict['labels']!=IGNORE_INDEX).sum()==0:
 			return self.__getitem__(0)
+		data_dict['image2crops_nums'] = [1]
 		# image exist in the data
 		if has_image:
 			data_dict['image_aux_list'] = image_aux_list
@@ -1119,10 +1120,11 @@ class LazySupervisedDataset(Dataset):
 			processor_aux_list = self.data_args.image_processor_aux_list
 			data_dict['image_aux_list'] = [torch.zeros(3, processor_aux.crop_size['height'], processor_aux.crop_size['width']) for processor_aux in processor_aux_list]
 			image_size = (crop_size, crop_size)
+			data_dict['image2crops_nums'] = []
 		data_dict['image_size'] = image_size
 
 		data_dict['images'] = data_dict['image_aux_list'][0].unsqueeze(0)
-		data_dict['image2crops_nums'] = [1]
+		
 
 		return data_dict
 
