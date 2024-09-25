@@ -47,6 +47,22 @@ class CambrianConfig(LlamaConfig):
 
 	debug = "debug"
 
+def get_image_compress(hidden_states_image_full, compress_reduce_factor, per_crop_token_len=576):
+	bs = hidden_states_image_full.shape[0]
+	num_image_crops = hidden_states_image_full.shape[1]//per_crop_token_len
+	h_full = w_full = int(per_crop_token_len**0.5)
+	h_compress = w_compress = h_full//compress_reduce_factor
+
+	hidden_states_image_full = hidden_states_image_full.view(bs*num_image_crops, h_full, w_full, -1)
+	
+	hidden_states_image_compress = nn.functional.interpolate(
+	hidden_states_image_full.permute(0, 3, 1, 2).contiguous(),
+		size=(h_compress, w_compress),
+		mode='bilinear',
+		align_corners=False
+	)
+	hidden_states_image_compress = hidden_states_image_compress.permute(0, 2, 3, 1).contiguous().view(bs, num_image_crops*h_compress*w_compress, -1)
+	return hidden_states_image_compress
 
 class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 	config_class = CambrianConfig
@@ -77,83 +93,121 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 		return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-		# retrieve input_ids and inputs_embeds
-		if input_ids is not None and inputs_embeds is not None:
-			raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
-		elif input_ids is not None:
-			batch_size, seq_length = input_ids.shape[:2]
-		elif inputs_embeds is not None:
-			batch_size, seq_length = inputs_embeds.shape[:2]
-		else:
-			raise ValueError("You have to specify either input_ids or inputs_embeds")
-
-		if self.gradient_checkpointing and self.training:
-			if use_cache:
-				logger.warning_once(
-					"`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."
-				)
-				use_cache = False
-
-		past_key_values_length = 0
-		if use_cache:
-			use_legacy_cache = not isinstance(past_key_values, Cache)
-			if use_legacy_cache:
-				past_key_values = DynamicCache.from_legacy_cache(past_key_values)
-			past_key_values_length = past_key_values.get_usable_length(seq_length)
-
-		if position_ids is None:
-			device = input_ids.device if input_ids is not None else inputs_embeds.device
-			position_ids = torch.arange(
-				past_key_values_length, seq_length + past_key_values_length, dtype=torch.long, device=device
-			)
-			position_ids = position_ids.unsqueeze(0)
-
-		if inputs_embeds is None:
-			inputs_embeds = self.embed_tokens(input_ids)
-
 		self._use_flash_attention_2 = getattr(self, '_use_flash_attention_2', False)
 		self._use_sdpa = getattr(self, '_use_sdpa', True)
 
-		# embed positions
-		hidden_states = inputs_embeds
 		# decoder layers
 		all_hidden_states = () if output_hidden_states else None
 		all_self_attns = () if output_attentions else None
 		next_decoder_cache = None
 
-		for i, decoder_layer in enumerate(self.layers):
+		max_num_image_crops = self.config.max_num_image_crops
+		per_crop_token_len = self.config.per_crop_token_len
+		compress_reduce_factor = self.config.compress_reduce_factor
+		compress_v = self.config.compress_v
+		compress_v_start_layer = self.config.compress_v_start_layer
+
+		len_image_full = max_num_image_crops * per_crop_token_len
+		len_newline_full = max_num_image_crops
+		len_image_compress = max_num_image_crops * per_crop_token_len // compress_reduce_factor**2
+		len_text = inputs_embeds.shape[1] - len_image_full - len_newline_full
+
+		hidden_states = inputs_embeds
+
+		hidden_states_image_full = hidden_states[:, :len_image_full]
+		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
+		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
+
+		
+
+		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
+
+			if not compress_v or layer_i < compress_v_start_layer:
+
+				if self.gradient_checkpointing and self.training:
+					layer_outputs = self._gradient_checkpointing_func(
+						decoder_layer.__call__,
+						hidden_states,
+						attention_mask_regular_4d,
+						position_ids,
+						position_ids,
+						past_key_values,
+						output_attentions,
+						use_cache,
+						False,
+						len_image_compress,
+						len_image_full
+					)
+				else:
+					layer_outputs = decoder_layer(
+						hidden_states,
+						attention_mask_regular_4d,
+						position_ids,
+						position_ids,
+						past_key_values,
+						output_attentions,
+						use_cache,
+						False,
+						len_image_compress,
+						len_image_full
+					)
 				
-				cur_attention_mask = attention_mask_regular_4d
-
-			if self.gradient_checkpointing and self.training:
-				layer_outputs = self._gradient_checkpointing_func(
-					decoder_layer.__call__,
-					hidden_states,
-					cur_attention_mask,
-					position_ids,
-					past_key_values,
-					output_attentions,
-					use_cache,
-				)
+				hidden_states = layer_outputs[0]
+							
 			else:
-				layer_outputs = decoder_layer(
-					hidden_states,
-					attention_mask=cur_attention_mask,
-					position_ids=position_ids,
-					past_key_value=past_key_values,
-					output_attentions=output_attentions,
-					use_cache=use_cache,
-				)
+				if layer_i == compress_v_start_layer:
+					hidden_states_image_full = hidden_states[:, :len_image_full]
+					hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
+					hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
 
-			hidden_states = layer_outputs[0]
+					position_ids_image_full = position_ids[:, :len_image_full]
+					position_ids_newline_full = position_ids[:, len_image_full:len_image_full+len_newline_full]
+					position_ids_text = position_ids[:, len_image_full+len_newline_full:]
 
-			if use_cache:
-				next_decoder_cache = layer_outputs[2 if output_attentions else 1]
+					hidden_states_image_compress = get_image_compress(hidden_states_image_full, compress_reduce_factor, per_crop_token_len)
 
-			if output_attentions:
-				all_self_attns += (layer_outputs[1],)
+					position_ids_compress_q = torch.cat([position_ids_image_compress, position_ids_newline_full, position_ids_text], 1)
+					position_ids_compress_kv = torch.cat([position_ids_image_compress, position_ids_image_full,  position_ids_newline_full, position_ids_text], 1)
+
+
+				if self.gradient_checkpointing and self.training:
+					layer_outputs = self._gradient_checkpointing_func(
+						decoder_layer.__call__,
+						torch.cat([hidden_states_image_compress, hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1),
+						attention_mask_compress_4d,
+						position_ids_compress_q,
+						position_ids_compress_kv,
+						past_key_values,
+						output_attentions,
+						use_cache,
+						True,
+						len_image_compress,
+						len_image_full
+					)
+				else:
+					layer_outputs = decoder_layer(
+						torch.cat([hidden_states_image_compress, hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1),
+						attention_mask_compress_4d,
+						position_ids_compress_q,
+						position_ids_compress_kv,
+						past_key_values,
+						output_attentions,
+						use_cache,
+						True,
+						len_image_compress,
+						len_image_full
+					)
+
+				hidden_states_image_compress = layer_outputs[0][:, :len_image_compress]
+				hidden_states_newline_full = layer_outputs[0][:, len_image_compress:len_image_compress+len_newline_full]
+				hidden_states_text = layer_outputs[0][:, len_image_compress+len_newline_full:]
+
+				hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
+
+				if layer_i == len(self.layers) - 1:
+					hidden_states = torch.cat([hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1)
 
 		hidden_states = self.norm(hidden_states)
 
@@ -162,8 +216,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 			all_hidden_states += (hidden_states,)
 
 		next_cache = None
-		if use_cache:
-			next_cache = next_decoder_cache.to_legacy_cache() if use_legacy_cache else next_decoder_cache
+
 		if not return_dict:
 			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
 		return BaseModelOutputWithPast(
@@ -380,6 +433,134 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 		if image_sizes is not None:
 			inputs['image_sizes'] = image_sizes
 		return inputs
+	
+from transformers.models.llama.modeling_llama import LlamaSdpaAttention, LlamaDecoderLayer, LlamaRMSNorm, rotate_half, repeat_kv
+def apply_rotary_pos_emb(q, k, cos, sin, position_ids_q, position_ids_k, unsqueeze_dim=1):
+	cos_q = cos[position_ids_q].unsqueeze(unsqueeze_dim)
+	sin_q = sin[position_ids_q].unsqueeze(unsqueeze_dim)
+	q_embed = (q * cos_q) + (rotate_half(q) * sin_q)
+	cos_k = cos[position_ids_k].unsqueeze(unsqueeze_dim)
+	sin_k = sin[position_ids_k].unsqueeze(unsqueeze_dim)
+	k_embed = (k * cos_k) + (rotate_half(k) * sin_k)
+	return q_embed, k_embed
+
+
+def LlamaSdpaAttention_forward(
+	self,
+	hidden_states,
+	kv_states,
+	attention_mask = None,
+	position_ids_q = None,
+	position_ids_kv = None,
+	past_key_value = None,
+	output_attentions = False,
+	use_cache= False,
+):
+
+	bsz, q_len, _ = hidden_states.size()
+	kv_seq_len = kv_states.shape[1]
+
+	query_states = self.q_proj(hidden_states).to(hidden_states.dtype)
+	key_states = self.k_proj(kv_states).to(hidden_states.dtype)
+	value_states = self.v_proj(kv_states).to(hidden_states.dtype)
+
+	query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+	key_states = key_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+	value_states = value_states.view(bsz, kv_seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+
+	cos, sin = self.rotary_emb(value_states, seq_len=max(q_len, kv_seq_len))
+
+	query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids_q, position_ids_kv)
+
+	key_states = repeat_kv(key_states, self.num_key_value_groups)
+	value_states = repeat_kv(value_states, self.num_key_value_groups)
+
+	if attention_mask is not None:
+		if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
+			raise ValueError(
+				f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
+			)
+
+	# SDPA with memory-efficient backend is currently (torch==2.1.2) bugged with non-contiguous inputs with custom attn_mask,
+	# Reference: https://github.com/pytorch/pytorch/issues/112577.
+	if query_states.device.type == "cuda" and attention_mask is not None:
+		query_states = query_states.contiguous()
+		key_states = key_states.contiguous()
+		value_states = value_states.contiguous()
+
+	attn_output = torch.nn.functional.scaled_dot_product_attention(
+		query_states,
+		key_states,
+		value_states,
+		attn_mask=attention_mask,
+		dropout_p=self.attention_dropout if self.training else 0.0,
+		# The q_len > 1 is necessary to match with AttentionMaskConverter.to_causal_4d that does not create a causal mask in case q_len == 1.
+		is_causal=self.is_causal and attention_mask is None and q_len > 1,
+	)
+
+	attn_output = attn_output.transpose(1, 2).contiguous()
+	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
+
+	attn_output = self.o_proj(attn_output)
+
+	return attn_output, None, past_key_value
+
+LlamaSdpaAttention.forward = LlamaSdpaAttention_forward
+
+def decoder_forward(
+	self,
+	hidden_states,
+	attention_mask = None,
+	position_ids_q = None,
+	position_ids_kv = None,
+	past_key_value = None,
+	output_attentions = False,
+	use_cache = False,
+	fast_vision=False,
+	len_image_compress=36,
+	len_image_full=576,
+	**kwargs,):
+		if fast_vision:
+			residual = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
+			hidden_states = self.input_layernorm(hidden_states)
+			kv_states = hidden_states
+			hidden_states = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
+		else:
+			residual = hidden_states
+			hidden_states = self.input_layernorm(hidden_states)
+			kv_states = hidden_states
+
+		# Cross Attention
+		hidden_states, self_attn_weights, present_key_value = self.self_attn(
+			hidden_states=hidden_states,
+			kv_states = kv_states,
+			attention_mask=attention_mask,
+			position_ids_q=position_ids_q,
+			position_ids_kv=position_ids_kv,
+			past_key_value=past_key_value,
+			output_attentions=output_attentions,
+			use_cache=use_cache,
+			**kwargs,
+		)
+		hidden_states = residual + hidden_states
+
+		# Fully Connected
+		residual = hidden_states
+		hidden_states = self.post_attention_layernorm(hidden_states)
+		hidden_states = self.mlp(hidden_states)
+		hidden_states = residual + hidden_states
+
+		outputs = (hidden_states,)
+
+		if output_attentions:
+			outputs += (self_attn_weights,)
+
+		if use_cache:
+			outputs += (present_key_value,)
+
+		return outputs
+
+LlamaDecoderLayer.forward = decoder_forward
 
 AutoConfig.register("cambrian_llama", CambrianConfig)
 AutoModelForCausalLM.register(CambrianConfig, CambrianLlamaForCausalLM)
