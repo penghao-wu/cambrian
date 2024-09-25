@@ -200,7 +200,6 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				)
 
 			hidden_states = layer_outputs[0]
-			assert False, hidden_states[0, 35 + 575]
 			# vision_tokens = self.vision_sampler_layers[i](vision_tokens)
 
 			# hidden_states[:, latent_query_start_idx:latent_query_start_idx+latent_query_newline_num, :] = vision_tokens
@@ -305,7 +304,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				all_self_attns += (layer_outputs[1],)
 
 		hidden_states = self.norm(hidden_states)
-
+		assert False, hidden_states[0, 35 + 575]
 		# add hidden states from the last decoder layer
 		if output_hidden_states:
 			all_hidden_states += (hidden_states,)
