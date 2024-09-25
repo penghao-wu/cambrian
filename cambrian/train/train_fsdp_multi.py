@@ -1552,8 +1552,6 @@ class DataCollatorForSupervisedDataset(object):
 				cur_input_ids, cur_labels = repeat_image_tokens(cur_input_ids, cur_labels, cur_image2crops_nums)
 			input_ids_crops_repeated.append(cur_input_ids)
 			labels_crops_repeated.append(cur_labels)
-
-		assert False, (input_ids_crops_repeated[0], labels_crops_repeated[0])
 				
 		attention_mask = [cur_input_ids.ne(self.tokenizer.pad_token_id) for cur_input_ids in input_ids_crops_repeated]
 
