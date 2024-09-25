@@ -54,7 +54,7 @@ python cambrian/train/train_tpu.py \
     --tf32 False \
     --model_max_length 2048 \
     --gradient_checkpointing True \
-    --dataloader_num_workers 4 \
+    --dataloader_num_workers 0 \
     --lazy_preprocess True \
     --report_to wandb \
     --run_name $CKPT_NAME \
