@@ -118,7 +118,9 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
 		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
 
-		
+		data_dict = {'hidden_states':hidden_states.detach().cpu(), 'attention_mask':attention_mask_regular_4d.detach().cpu(), 'position_ids':position_ids.detach().cpu()}
+		torch.save(data_dict, 'input_v.pth' )
+		assert False
 
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:

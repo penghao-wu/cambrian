@@ -411,10 +411,6 @@ class CambrianMetaForCausalLM(ABC):
 
         newline_embeds = self.get_model().image_newline.view(1, 1, -1).repeat(bs, max_num_image_crops, 1)
 
-        data_dict = {'image_feature':image_features.detach().cpu()}
-        torch.save(data_dict, 'data_v.pth' )
-        assert False
-
         input_embeds = torch.cat([image_features, newline_embeds, text_input_embeds], 1)
 
         return None, input_embeds
