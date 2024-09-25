@@ -1455,7 +1455,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 			pad_len = max_text_len - cur_text_len
 			input_ids_text[batch_idx] = torch.cat([input_ids_text[batch_idx], torch.full((pad_len, ), pad_token_id, dtype=input_ids_text[batch_idx].dtype)])
 			attention_mask_text[batch_idx] = torch.cat([attention_mask_text[batch_idx], torch.full((pad_len, ), 0, dtype=torch.bool)])
-			position_ids_text[batch_idx] = torch.cat([position_ids_text[batch_idx], torch.arange((position_ids_text[batch_idx].max().item()+1, position_ids_text[batch_idx].max().item()+1+pad_len), dtype=torch.long)])
+			position_ids_text[batch_idx] = torch.cat([position_ids_text[batch_idx], torch.arange(position_ids_text[batch_idx].max().item()+1, position_ids_text[batch_idx].max().item()+1+pad_len, dtype=torch.long)])
 			labels_text[batch_idx] = torch.cat([labels_text[batch_idx], torch.full((pad_len, ), IGNORE_INDEX, dtype=torch.long)])
 
 	input_ids_text = torch.stack(input_ids_text)
