@@ -170,10 +170,6 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		# skip_layers = [_ for _ in range(0, 32)]
 		skip_layers = []
 
-		data_dict = {'hidden_states':hidden_states.detach().cpu(), 'attention_mask':attention_mask.detach().cpu(), 'position_ids':position_ids.detach().cpu()}
-		torch.save(data_dict, 'input_main.pth' )
-		assert False
-
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
@@ -470,7 +466,6 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			# Enable model parallelism
 			shift_labels = shift_labels.to(shift_logits.device)
 			loss = loss_fct(shift_logits, shift_labels)
-			assert False, (shift_labels[622:], loss, shift_logits[622:], (shift_labels!=-100).sum(), shift_labels.shape)
 
 		if not return_dict:
 			output = (logits,) + outputs[1:]
