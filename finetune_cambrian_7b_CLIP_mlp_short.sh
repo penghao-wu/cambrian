@@ -3,16 +3,19 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_13b_CLIP_mlp_576_finetune_737k" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_576_finetune_737k_nounmask_debug" &&
+
+export TPU_PROCESS_BOUNDS=1,1,1 &&
+export TPU_VISIBLE_CHIPS=0 &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path /mnt/disks/storage/llm_ckpts/vicuna1.5 \
+    --model_name_or_path lmsys/vicuna-7b-v1.5 \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./cambrian_13b_CLIP_mlp_576_shareGPT4V_pretrain/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./compressv_vicuna7b_CLIP_mlp_baseline_shareGPT4V_pretrain/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --image_token_len 576 \
@@ -35,7 +38,7 @@ python cambrian/train/train_tpu.py \
     --bf16 False \
     --output_dir $CKPT_DIR \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 4 \
+    --per_device_train_batch_size 1 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy "no" \
@@ -48,9 +51,9 @@ python cambrian/train/train_tpu.py \
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
     --tf32 False \
-    --model_max_length 2048 \
+    --model_max_length 626 \
     --gradient_checkpointing True \
-    --dataloader_num_workers 4 \
+    --dataloader_num_workers 0 \
     --lazy_preprocess True \
     --report_to wandb \
     --run_name $CKPT_NAME \
