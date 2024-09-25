@@ -3,7 +3,10 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_576_finetune_737k_nounmask" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_576_finetune_737k_nounmask_debug" &&
+
+export TPU_PROCESS_BOUNDS=1,1,1 &&
+export TPU_VISIBLE_CHIPS=0 &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -35,7 +38,7 @@ python cambrian/train/train_tpu.py \
     --bf16 False \
     --output_dir $CKPT_DIR \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 4 \
+    --per_device_train_batch_size 1 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy "no" \
@@ -48,9 +51,9 @@ python cambrian/train/train_tpu.py \
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
     --tf32 False \
-    --model_max_length 2048 \
+    --model_max_length 626 \
     --gradient_checkpointing True \
-    --dataloader_num_workers 4 \
+    --dataloader_num_workers 0 \
     --lazy_preprocess True \
     --report_to wandb \
     --run_name $CKPT_NAME \
