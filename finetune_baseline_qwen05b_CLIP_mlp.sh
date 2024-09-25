@@ -5,9 +5,6 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_finetune_737k" &&
 
-export TPU_PROCESS_BOUNDS=1,1,1 &&
-export TPU_VISIBLE_CHIPS=0 &&
-
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
@@ -54,7 +51,7 @@ python cambrian/train/train_tpu.py \
     --tf32 False \
     --model_max_length 2048 \
     --gradient_checkpointing True \
-    --dataloader_num_workers 0 \
+    --dataloader_num_workers 4 \
     --lazy_preprocess True \
     --report_to wandb \
     --run_name $CKPT_NAME \
