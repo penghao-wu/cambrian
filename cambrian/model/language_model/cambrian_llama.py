@@ -125,9 +125,6 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				all_hidden_states += (hidden_states,)
 
 			if not compress_v or layer_i < compress_v_start_layer:
-				data_dict = {"hidden_states":hidden_states.detach().cpu(), "cur_attention_mask":attention_mask_regular_4d.detach().cpu(), "position_ids":position_ids.detach().cpu()}
-				torch.save(data_dict, 'data_v.npy')
-				assert False
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
 						decoder_layer.__call__,

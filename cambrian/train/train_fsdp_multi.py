@@ -1253,7 +1253,7 @@ class LazySupervisedDataset(Dataset):
 		data_dict['image2crops_nums'] = image2crops_nums
 		return data_dict
 
-def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, dummy_num=1):
+def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, dummy_num=1, max_length=2048):
 	height = width = int(per_crop_token_len**0.5)
 	height_compress = width_compress = height // compress_reduce_factor
 
@@ -1261,10 +1261,10 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 		attention_mask_image_full = torch.zeros((dummy_num*(height*width),), dtype=torch.bool)
 		attention_mask_newline_full = torch.zeros((dummy_num,), dtype=torch.bool)
 		position_ids_image_full = torch.zeros((dummy_num*(height*width),), dtype=torch.long)
-		position_ids_newline_full = torch.zeros((dummy_num,), dtype=torch.long)
+		position_ids_newline_full = torch.full((dummy_num,), max_length-1, dtype=torch.long)
 
 		attention_mask_image_compress = torch.zeros((dummy_num*height_compress*width_compress,), dtype=torch.bool)
-		position_ids_image_compress = torch.zeros((dummy_num*height_compress*width_compress,), dtype=torch.long)
+		position_ids_image_compress = torch.full((dummy_num*height_compress*width_compress,), max_length-1, dtype=torch.long)
 	else:
 		attention_mask_image_full_withnewline = torch.ones((height * width+1,), dtype=torch.bool)
 		position_ids_image_full_withnewline = (attention_mask_image_full_withnewline.cumsum(0)-1).to(torch.long)
@@ -1336,9 +1336,9 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 			attention_mask_newline_full.append(torch.zeros((max_num_image_crops,), dtype=torch.bool))
 			attention_mask_text.append(cur_attention_mask)
 
-			position_ids_image_full.append(torch.zeros((max_num_image_crops*per_crop_token_len,), dtype=torch.long))
+			position_ids_image_full.append(torch.full((max_num_image_crops*per_crop_token_len,), max_length-1, dtype=torch.long))
 			position_ids_image_compress.append(torch.zeros((max_num_image_crops*(per_crop_token_len//compress_reduce_factor**2),), dtype=torch.long))
-			position_ids_newline_full.append(torch.zeros((max_num_image_crops,), dtype=torch.long))
+			position_ids_newline_full.append(torch.full((max_num_image_crops,), max_length-1, dtype=torch.long))
 			position_ids_text.append((cur_attention_mask.cumsum(0)-1).to(torch.long))
 
 			labels_image_full.append(torch.full((max_num_image_crops*per_crop_token_len,), IGNORE_INDEX, dtype=torch.long))
@@ -1385,7 +1385,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 			# Here we do not consider unpadding thing or spatial concat and always append a newline after each image crop
 
 			if i < len(image_token_indices) - 2:
-				cur_image_info = prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False)
+				cur_image_info = prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, max_length=max_length)
 				cur_attention_mask_image_full.append(cur_image_info['attention_mask_image_full'])
 				cur_attention_mask_image_compress.append(cur_image_info['attention_mask_image_compress'])
 				cur_attention_mask_newline_full.append(cur_image_info['attention_mask_newline_full'])
@@ -1410,7 +1410,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 		if num_image_crops < max_num_image_crops:
 			num_image_crops_padded = max_num_image_crops - num_image_crops
 
-			cur_image_info_dummy = prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=True, dummy_num=num_image_crops_padded)
+			cur_image_info_dummy = prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=True, dummy_num=num_image_crops_padded, max_length=max_length)
 
 			cur_attention_mask_image_full.append(cur_image_info_dummy['attention_mask_image_full'])
 			cur_attention_mask_image_compress.append(cur_image_info_dummy['attention_mask_image_compress'])
@@ -1455,7 +1455,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 			pad_len = max_text_len - cur_text_len
 			input_ids_text[batch_idx] = torch.cat([input_ids_text[batch_idx], torch.full((pad_len, ), pad_token_id, dtype=input_ids_text[batch_idx].dtype)])
 			attention_mask_text[batch_idx] = torch.cat([attention_mask_text[batch_idx], torch.full((pad_len, ), 0, dtype=torch.bool)])
-			position_ids_text[batch_idx] = torch.cat([position_ids_text[batch_idx], torch.full((pad_len, ), 0, dtype=torch.long)])
+			position_ids_text[batch_idx] = torch.cat([position_ids_text[batch_idx], torch.full((pad_len, ), max_length-1, dtype=torch.long)])
 			labels_text[batch_idx] = torch.cat([labels_text[batch_idx], torch.full((pad_len, ), IGNORE_INDEX, dtype=torch.long)])
 
 	input_ids_text = torch.stack(input_ids_text)
