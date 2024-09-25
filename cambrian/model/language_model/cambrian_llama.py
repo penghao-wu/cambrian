@@ -468,7 +468,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 			# Enable model parallelism
 			shift_labels = shift_labels.to(shift_logits.device)
 			loss = loss_fct(shift_logits, shift_labels)
-			assert False, (shift_labels[622:], loss, shift_logits[622:])
+			assert False, (shift_labels[621:], loss, shift_logits[621:])
 
 		if not return_dict:
 			output = (logits,) + outputs[1:]
