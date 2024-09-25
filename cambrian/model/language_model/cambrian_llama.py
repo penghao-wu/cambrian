@@ -155,7 +155,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 					)
 				
 				hidden_states = layer_outputs[0]
-				import pdb; pdb.set_trace()
+				print(layer_i, hidden_states[0, 575])
 							
 			else:
 				if layer_i == compress_v_start_layer:
@@ -211,6 +211,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 					hidden_states = torch.cat([hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1)
 
 		hidden_states = self.norm(hidden_states)
+		assert False, hidden_states[0, 575]
 		# add hidden states from the last decoder layer
 		if output_hidden_states:
 			all_hidden_states += (hidden_states,)
