@@ -1481,6 +1481,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 
 	# regular attention: Q=[image_full, newline_full, text], KV=[image_full, newline_full, text]
 	attention_mask_regular_4d = calculate_causal_attention_mask(position_ids, position_ids, attention_mask)
+	assert False, (attention_mask_regular_4d[0, 0, :, -10])
 
 	# compressv attention: Q=[image_compress, newline_full, text], KV=[image_compress, image_full, newline_full, text]
 	attention_mask_compress_4d = calculate_causal_attention_mask(torch.cat([position_ids_image_compress, position_ids_newline_full, position_ids_text], 1), torch.cat([position_ids_image_compress, position_ids_image_full, position_ids_newline_full, position_ids_text], 1), torch.cat([attention_mask_image_compress, attention_mask_image_full, attention_mask_newline_full, attention_mask_text], 1))
