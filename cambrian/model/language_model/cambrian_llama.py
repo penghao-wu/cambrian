@@ -117,15 +117,10 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		hidden_states_image_full = hidden_states[:, :len_image_full]
 		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
 		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
-
-		data_dict = {'hidden_states':hidden_states.detach().cpu(), 'attention_mask':attention_mask_regular_4d.detach().cpu(), 'position_ids':position_ids.detach().cpu()}
-		torch.save(data_dict, 'input_v.pth' )
-		assert False
-
+		print(3333, hidden_states[0, :576])
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
-			print(layer_i, hidden_states[0, 622:])
 			if not compress_v or layer_i < compress_v_start_layer:
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
@@ -272,6 +267,7 @@ class CambrianLlamaForCausalLM(LlamaForCausalLM, CambrianMetaForCausalLM):
 				input_ids,
 				images,
 			)
+			print(2222, inputs_embeds[0, :576])
 		if IS_XLA_AVAILABLE:
 			# Very Important for TorchXLA
 			#self.model.gradient_checkpointing = False
