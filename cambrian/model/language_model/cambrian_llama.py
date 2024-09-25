@@ -136,6 +136,9 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 		hidden_states, position_ids, attention_mask_regular_4d = reorg(hidden_states, position_ids, attention_mask_regular_4d)
 
+		data_dict = {"hidden_states":hidden_states.detach().cpu(),"attention_mask":attention_mask_regular_4d.detach().cpu(),"position_ids":position_ids.detach().cpu()}
+		torch.save(data_dict, 'input_v.pth')
+
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
