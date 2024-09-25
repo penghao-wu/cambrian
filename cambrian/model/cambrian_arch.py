@@ -386,9 +386,6 @@ class CambrianMetaForCausalLM(ABC):
         image_aux_features_list = []
         for image_aux, vision_tower_aux in zip(image_aux_list, vision_tower_aux_list):
             image_aux_features = vision_tower_aux(image_aux)
-            data_dict = {'image':image_aux.detach().cpu(), 'image_feature':image_aux_features.detach().cpu()}
-            torch.save(data_dict, 'data_main.pth' )
-            assert False
             image_aux_features_list.append(image_aux_features)
         return image_aux_features_list
 
@@ -413,6 +410,10 @@ class CambrianMetaForCausalLM(ABC):
         text_input_embeds = self.get_model().embed_tokens(input_ids)
 
         newline_embeds = self.get_model().image_newline.view(1, 1, -1).repeat(bs, max_num_image_crops, 1)
+
+        data_dict = {'image_feature':image_features.detach().cpu()}
+        torch.save(data_dict, 'data_v.pth' )
+        assert False
 
         input_embeds = torch.cat([image_features, newline_embeds, text_input_embeds], 1)
 
