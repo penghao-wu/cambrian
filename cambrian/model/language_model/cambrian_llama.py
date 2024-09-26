@@ -154,10 +154,12 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		vision_token_start_idx = self.config.image_position
 		
 		image_token_len_per_side = int(self.config.image_token_len**0.5)
-		image_token_newline_num = self.config.image_token_len + image_token_len_per_side
+		# image_token_newline_num = self.config.image_token_len + image_token_len_per_side
+		image_token_newline_num = self.config.image_token_len
 
 		image_token_len_per_side_concise = int(self.config.image_token_len_concise**0.5)
-		image_token_concise_newline_num = self.config.image_token_len_concise + image_token_len_per_side_concise
+		# image_token_concise_newline_num = self.config.image_token_len_concise + image_token_len_per_side_concise
+		image_token_concise_newline_num = self.config.image_token_len_concise
 
 		hidden_states_sys = inputs_embeds[:, :vision_token_start_idx]
 		hidden_states_text = inputs_embeds[:, vision_token_start_idx+image_token_newline_num:]
@@ -182,7 +184,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 		# skip_layers = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
 		# skip_layers = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
 		# skip_layers = [_ for _ in range(0, 32)]
-		skip_layers = [_ for _ in range(14, 40)]
+		skip_layers = [_ for _ in range(11, 32)]
 		# skip_layers += [0, 1, 2, 3, 4, 5]
 
 		# skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
@@ -362,11 +364,12 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 				bs = hidden_states_vision_full.shape[0]
 				image_features_full_with_newline = hidden_states_vision_full.clone()
-				image_features_full_with_newline = image_features_full_with_newline.view(bs, image_token_len_per_side, image_token_len_per_side+1, -1)
-				image_features_full = image_features_full_with_newline[:, :, :-1, :]
-				image_features_full_newline = image_features_full_with_newline[:, :, -1:, :]
-				reduce_factor = image_token_len_per_side // image_token_len_per_side_concise
-				image_features_concise_newline = image_features_full_newline[:, ::reduce_factor, :, :].contiguous()
+				# image_features_full_with_newline = image_features_full_with_newline.view(bs, image_token_len_per_side, image_token_len_per_side+1, -1)
+				# image_features_full = image_features_full_with_newline[:, :, :-1, :]
+				# image_features_full_newline = image_features_full_with_newline[:, :, -1:, :]
+				# reduce_factor = image_token_len_per_side // image_token_len_per_side_concise
+				# image_features_concise_newline = image_features_full_newline[:, ::reduce_factor, :, :].contiguous()
+				image_features_full = image_features_full_with_newline.view(bs, image_token_len_per_side, image_token_len_per_side, -1)
 
 				image_features_concise = F.interpolate(
 				image_features_full.permute(0, 3, 1, 2).contiguous().to(torch.float32),
@@ -375,7 +378,8 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 					align_corners=False
 				).to(image_features_full.dtype)
 				image_features_concise = image_features_concise.permute(0, 2, 3, 1).contiguous()
-				image_features_concise_with_newline = torch.cat([image_features_concise, image_features_concise_newline], 2).flatten(1, 2)
+				# image_features_concise_with_newline = torch.cat([image_features_concise, image_features_concise_newline], 2).flatten(1, 2)
+				image_features_concise_with_newline = image_features_concise.flatten(1, 2)
 				hidden_states_vision_concise = image_features_concise_with_newline
 			
 
