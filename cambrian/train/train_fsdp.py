@@ -1213,7 +1213,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 			if i < len(image_token_indices) - 2:
 				num_tokens_per_side = int(image_token_len**0.5)
 				num_tokens_per_side_concise = int(image_token_len_concise**0.5)
-				image_token_len_with_newline = image_token_len + num_tokens_per_side
+				# image_token_len_with_newline = image_token_len + num_tokens_per_side
+				image_token_len_with_newline = image_token_len + 1
 				cur_input_ids_im_replaced.append(torch.full((image_token_len_with_newline-1,), 0, device=cur_input_ids.device, dtype=cur_input_ids.dtype))
 				cur_labels_im_replaced.append(torch.full((image_token_len_with_newline,), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
 
@@ -1225,7 +1226,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 				cur_vision_full_attention_mask = torch.cat([cur_vision_full_attention_mask, torch.ones((image_token_len_concise, 1), dtype=cur_vision_full_attention_mask.dtype)], dim=1)
 				vision_full_attention_mask.append(cur_vision_full_attention_mask)
 
-				cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
+				# cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=True)
+				cur_im_attention_mask_concise, cur_im_position_ids_concise = prepare_image_info(image_size, image_token_len_concise, newline=False)
 				cur_im_position_ids_concise += index
 				# index = cur_im_position_ids_concise.max()+1
 				position_ids_vision_concise.append(cur_im_position_ids_concise)
@@ -1248,7 +1250,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 					image_valid_mask.append(1)
 				else:
 					num_tokens_per_side = int(image_token_len**0.5)
-					image_token_len_with_newline = image_token_len + num_tokens_per_side
+					# image_token_len_with_newline = image_token_len + num_tokens_per_side
+					image_token_len_with_newline = image_token_len + 1
 					cur_attention_mask_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_attention_mask.device, dtype=cur_attention_mask.dtype))
 					cur_position_ids_im_replaced.append(torch.full((image_token_len_with_newline,), 0, device=cur_input_ids.device, dtype=torch.long))
 					image_valid_mask.append(0)
@@ -1286,7 +1289,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 		cur_attention_mask_im_replaced = combine_causal_attention_mask(len(cur_attention_mask_im_replaced), cur_attention_mask_im_replaced)
 		cur_im_attention_mask_concise = combine_causal_attention_mask(len(cur_im_attention_mask_concise), cur_im_attention_mask_concise)
 		num_tokens_per_side_concise = int(image_token_len_concise**0.5)
-		image_token_len_concise_with_newline = image_token_len_concise + num_tokens_per_side_concise
+		# image_token_len_concise_with_newline = image_token_len_concise + num_tokens_per_side_concise
+		image_token_len_concise_with_newline = image_token_len_concise
 
 
 		len_sys_full_text = len(cur_input_ids_im_replaced)
@@ -1307,13 +1311,6 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_sizes, imag
 
 		# text to all
 		cur_attention_mask_c2f[:, image_position+image_token_len_concise_with_newline:, :image_position] = cur_attention_mask_im_replaced[:, image_position+image_token_len_with_newline:, :image_position] # text to sys
-		# print(step, flush=True)
-		# if step < 1000:
-		# 	concise_p = 0.5
-		# elif step < 1800:
-		# 	concise_p = 0.3
-		# else:
-		# 	concise_p = -1
 
 		concise_p = -1
 
