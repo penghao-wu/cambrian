@@ -1136,28 +1136,29 @@ def prepare_image_info(image_size, image_token_len, newline=False):
 	num_tokens_per_side = int(image_token_len**0.5)
 	if newline:
 		# for the newline embedding
-		attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side+1, dtype=torch.bool)
+		# attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side+1, dtype=torch.bool)
+		attention_mask = torch.ones((num_tokens_per_side*num_tokens_per_side+1, ), dtype=torch.bool)
 	else:
 		attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side, dtype=torch.bool)
-	left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((num_tokens_per_side, num_tokens_per_side), image_size)
-	if newline:
-		if left_offset > 0:
-			attention_mask[:, :left_offset] = 0
-		if right_offset > 0:
-			attention_mask[:, -right_offset-1:-1] = 0
-		if top_offset > 0:
-			attention_mask[:top_offset, :]=0
-		if bottom_offset > 0:
-			attention_mask[-bottom_offset:, :] = 0
-	else:
-		if left_offset > 0:
-			attention_mask[:, :left_offset] = 0
-		if right_offset > 0:
-			attention_mask[:, -right_offset:] = 0
-		if top_offset > 0:
-			attention_mask[:top_offset, :]=0
-		if bottom_offset > 0:
-			attention_mask[-bottom_offset:, :] = 0
+	# left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((num_tokens_per_side, num_tokens_per_side), image_size)
+	# if newline:
+	# 	if left_offset > 0:
+	# 		attention_mask[:, :left_offset] = 0
+	# 	if right_offset > 0:
+	# 		attention_mask[:, -right_offset-1:-1] = 0
+	# 	if top_offset > 0:
+	# 		attention_mask[:top_offset, :]=0
+	# 	if bottom_offset > 0:
+	# 		attention_mask[-bottom_offset:, :] = 0
+	# else:
+	# 	if left_offset > 0:
+	# 		attention_mask[:, :left_offset] = 0
+	# 	if right_offset > 0:
+	# 		attention_mask[:, -right_offset:] = 0
+	# 	if top_offset > 0:
+	# 		attention_mask[:top_offset, :]=0
+	# 	if bottom_offset > 0:
+	# 		attention_mask[-bottom_offset:, :] = 0
 	attention_mask = attention_mask.flatten()
 	position_ids = attention_mask.cumsum(0)-1
 	return attention_mask, position_ids
