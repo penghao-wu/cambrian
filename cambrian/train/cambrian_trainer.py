@@ -20,9 +20,8 @@ from transformers.trainer import (
     has_length,
     ALL_LAYERNORM_LAYERS,
     logger,
+    is_torch_tpu_available
 )
-
-from transformers.trainer import is_torch_xla_available as is_torch_tpu_available
 
 from ezcolorlog import root_logger as logger
 from cambrian.utils import IS_XLA_AVAILABLE
