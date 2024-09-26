@@ -197,7 +197,7 @@ class CambrianMetaModel:
                 if compress_v:
                     num_of_vision_mlp_layers = self.config.num_hidden_layers - compress_v_start_layer
                     self.config.num_of_vision_mlp_layers = num_of_vision_mlp_layers
-                    hidden_size_reduce_factor = 4 if self.config.hidden_size >= 1024 else 2
+                    hidden_size_reduce_factor = 4 if self.config.hidden_size >= 1024 else 1
                     self.vision_mlp_layers = nn.ModuleList(
                         [VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor) for layer_idx in range(0, num_of_vision_mlp_layers)]
                         )
@@ -225,8 +225,8 @@ class CambrianMetaModel:
                     self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
                 self.vision_query.data = mm_projector_weights['model.vision_query']
             self.image_newline.data = mm_projector_weights['model.image_newline']
-            if compress_v:
-                self.vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, 'vision_mlp_layers'),strict=True)
+            # if compress_v:
+                # self.vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, 'vision_mlp_layers'),strict=True)
 
 
 def unmask_attention_mask(mask, original_size):
