@@ -228,7 +228,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				# 		output_attentions,
 				# 		use_cache,
 				# 	)
-
+				assert False, (position_ids_sys.shape, position_ids_vision_concise.shape, position_ids_vision_text.shape, position_ids_vision_full.shape, hidden_states_sys.shape, hidden_states_vision_concise.shape, hidden_states_text.shape,hidden_states_vision_full.shape)
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
 						decoder_layer.__call__,
