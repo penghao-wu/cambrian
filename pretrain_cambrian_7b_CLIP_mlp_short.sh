@@ -40,7 +40,7 @@ python cambrian/train/train_tpu.py \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy "no" \
     --save_strategy "steps" \
-    --save_steps 1000 \
+    --save_steps 1000000 \
     --save_total_limit 1 \
     --learning_rate 1e-3 \
     --weight_decay 0. \
@@ -58,12 +58,12 @@ python cambrian/train/train_tpu.py \
     --fsdp_config fsdp_config.json
 
 
-CKPT_PATH=checkpoints/$CKPT_NAME
-# check if the checkpoint path exists
-if [ ! -d "$CKPT_PATH" ]; then
-    echo "Checkpoint path does not exist. Exiting..."
-    exit 1
-fi
-echo "Training finished. Syncing checkpoints to GCS..."
-gcloud alpha storage rsync $CKPT_PATH gs://cambrian-archive/checkpoints/$CKPT_NAME
-echo "Syncing finished. Checkpoints are now available at gs://cambrian-archive/checkpoints/$CKPT_NAME"
+# CKPT_PATH=checkpoints/$CKPT_NAME
+# # check if the checkpoint path exists
+# if [ ! -d "$CKPT_PATH" ]; then
+#     echo "Checkpoint path does not exist. Exiting..."
+#     exit 1
+# fi
+# echo "Training finished. Syncing checkpoints to GCS..."
+# gcloud alpha storage rsync $CKPT_PATH gs://cambrian-archive/checkpoints/$CKPT_NAME
+# echo "Syncing finished. Checkpoints are now available at gs://cambrian-archive/checkpoints/$CKPT_NAME"
