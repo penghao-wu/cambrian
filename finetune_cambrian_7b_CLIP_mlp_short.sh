@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_skip11_32_finetune_738k_new" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_skipnone_finetune_737k_new" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
