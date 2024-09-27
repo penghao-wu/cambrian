@@ -360,7 +360,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				hidden_states_sys = layer_outputs[0][:, :vision_token_start_idx]
 				hidden_states_vision_full = layer_outputs[0][:, vision_token_start_idx:vision_token_start_idx+image_token_newline_num]
 
-				if i == skip_layers[0]-1:
+				if len(skip_layers) > 0 and i == skip_layers[0]-1:
 
 					bs = hidden_states_vision_full.shape[0]
 					image_features_full_with_newline = hidden_states_vision_full.clone()
