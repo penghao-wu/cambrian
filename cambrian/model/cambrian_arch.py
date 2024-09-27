@@ -185,7 +185,7 @@ class CambrianMetaModel:
                     torch.randn(self.config.hidden_size, dtype=self.dtype) * embed_std
                 )
                 self.vision_sampler_layers = nn.ModuleList(
-                    [VisionMLP(self.config, self.config.hidden_size//4) for layer_idx in range(0, self.config.num_hidden_layers)]
+                    [VisionMLP(self.config, self.config.hidden_size//2) for layer_idx in range(0, self.config.num_hidden_layers)]
                     )
                 # for i in range(self.config.num_hidden_layers):
                     # self.layers[i].vision_sampler_layers = VisionMLP(self.config)
@@ -232,7 +232,7 @@ class CambrianMetaModel:
             # self.mm_projector_aux_0.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_0'),strict=True)
             # self.mm_projector_aux_1.load_state_dict(get_w(mm_projector_weights, 'mm_projector_aux_1'),strict=True)
             # self.vision_sampler.load_state_dict(get_w(mm_projector_weights, 'vision_sampler'),strict=True)
-            # self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
+            self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
 
 
 def unmask_attention_mask(mask, original_size):
