@@ -483,26 +483,26 @@ class CambrianMetaForCausalLM(ABC):
 
         if IS_XLA_AVAILABLE:
             image_features = image_features.view(bs, final_height, final_width, -1)
-            # image_features = torch.cat((
-            #     image_features,
-            #     self.model.image_newline[None, None, None, :].expand(image_features.shape[0], final_height, 1, -1)
-            # ), dim=2)
-            image_features = image_features.flatten(1, 2)
             image_features = torch.cat((
                 image_features,
-                self.model.image_newline[None, None, :].expand(image_features.shape[0], 1, -1)
-            ), dim=1)
+                self.model.image_newline[None, None, None, :].expand(image_features.shape[0], final_height, 1, -1)
+            ), dim=2)
+            image_features = image_features.flatten(1, 2)
+            # image_features = torch.cat((
+            #     image_features,
+            #     self.model.image_newline[None, None, :].expand(image_features.shape[0], 1, -1)
+            # ), dim=1)
 
             image_features_concise = image_features_concise.view(bs, final_height_concise, final_width_concise, -1)
-            # image_features_concise = torch.cat((
-            #     image_features_concise,
-            #     self.model.image_newline[None, None, None, :].expand(bs, final_height_concise, 1, -1)
-            # ), dim=2)
-            image_features_concise = image_features_concise.flatten(1, 2)
             image_features_concise = torch.cat((
                 image_features_concise,
-                self.model.image_newline[None, None, :].expand(image_features_concise.shape[0], 1, -1)
-            ), dim=1)
+                self.model.image_newline[None, None, None, :].expand(bs, final_height_concise, 1, -1)
+            ), dim=2)
+            image_features_concise = image_features_concise.flatten(1, 2)
+            # image_features_concise = torch.cat((
+                # image_features_concise,
+                # self.model.image_newline[None, None, :].expand(image_features_concise.shape[0], 1, -1)
+            # ), dim=1)
 
 
             final_size = [(final_height, final_width)]*bs
