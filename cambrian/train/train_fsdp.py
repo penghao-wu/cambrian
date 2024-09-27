@@ -1141,24 +1141,24 @@ def prepare_image_info(image_size, image_token_len, newline=False):
 	else:
 		attention_mask = torch.ones(num_tokens_per_side, num_tokens_per_side, dtype=torch.bool)
 	left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((num_tokens_per_side, num_tokens_per_side), image_size)
-	if newline:
-		if left_offset > 0:
-			attention_mask[:, :left_offset] = 0
-		if right_offset > 0:
-			attention_mask[:, -right_offset-1:-1] = 0
-		if top_offset > 0:
-			attention_mask[:top_offset, :]=0
-		if bottom_offset > 0:
-			attention_mask[-bottom_offset:, :] = 0
-	else:
-		if left_offset > 0:
-			attention_mask[:, :left_offset] = 0
-		if right_offset > 0:
-			attention_mask[:, -right_offset:] = 0
-		if top_offset > 0:
-			attention_mask[:top_offset, :]=0
-		if bottom_offset > 0:
-			attention_mask[-bottom_offset:, :] = 0
+	# if newline:
+	# 	if left_offset > 0:
+	# 		attention_mask[:, :left_offset] = 0
+	# 	if right_offset > 0:
+	# 		attention_mask[:, -right_offset-1:-1] = 0
+	# 	if top_offset > 0:
+	# 		attention_mask[:top_offset, :]=0
+	# 	if bottom_offset > 0:
+	# 		attention_mask[-bottom_offset:, :] = 0
+	# else:
+	# 	if left_offset > 0:
+	# 		attention_mask[:, :left_offset] = 0
+	# 	if right_offset > 0:
+	# 		attention_mask[:, -right_offset:] = 0
+	# 	if top_offset > 0:
+	# 		attention_mask[:top_offset, :]=0
+	# 	if bottom_offset > 0:
+	# 		attention_mask[-bottom_offset:, :] = 0
 	attention_mask = attention_mask.flatten()
 	position_ids = attention_mask.cumsum(0)-1
 	return attention_mask, position_ids
@@ -1793,8 +1793,8 @@ def train(INDEX, attn_implementation=None):
 			model.requires_grad_(False)
 			# for p in model.get_model().mm_projector.parameters():
 			#     p.requires_grad = True
-			# tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline']
-			tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query']
+			tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline']
+			# tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query']
 			for name, param in model.named_parameters():
 				if any(listed_name in name for listed_name in tune_modules):
 					print_rank0('tuning {}'.format(name))
