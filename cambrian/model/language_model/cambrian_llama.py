@@ -393,7 +393,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 			
 
 		hidden_states_text = self.norm(hidden_states_text)
-		aux_loss_total = aux_loss_total/len(skip_layers)
+		aux_loss_total = aux_loss_total
 
 		# add hidden states from the last decoder layer
 		if output_hidden_states:
