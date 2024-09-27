@@ -508,7 +508,6 @@ class VisionMLP(nn.Module):
 		input_embed_newline = torch.repeat_interleave(context_newline, reduce_factor, 1)
 
 		input_embed = torch.cat([input_embed, input_embed_newline], 2).flatten(1,2)
-		input_embed = input_embed.flatten(1,2)
 
 		return input_embed
 
