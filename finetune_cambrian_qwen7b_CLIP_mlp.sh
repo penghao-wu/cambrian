@@ -3,16 +3,16 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_576_finetune_738k_debug_maintpu" &&
+export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_576_finetune_737k_old_nounpad" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
     --model_name_or_path "Qwen/Qwen2-0.5B-Instruct" \
     --version qwen_1_5 \
-    --data_path ./llava_next_raw_format_processed.jsonl\
-    --image_folder ./llava_next \
-    --pretrain_mm_mlp_adapter ./llava15-openai_clip-vit-large-patch14-336-Qwen_Qwen2-0.5B-Instruct-mlp2x_gelu-pretrain_sharegpt4v_plain_bs512/mm_projector.bin \
+    --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
+    --image_folder /mnt/disks/storage/data/finetune_data \
+    --pretrain_mm_mlp_adapter ./cambrian_qwen05b_CLIP_mlp_576_shareGPT4V_pretrain_old_nounpad/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --image_token_len 576 \
