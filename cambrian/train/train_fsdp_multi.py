@@ -1084,7 +1084,8 @@ class LazySupervisedDataset(Dataset):
 					result = Image.new(pil_img.mode, (height, height), background_color)
 					result.paste(pil_img, ((height - width) // 2, 0))
 					return result
-			image = expand2square(image, tuple(int(x * 255) for x in processor.image_mean))
+			# image = expand2square(image, tuple(int(x * 255) for x in processor.image_mean))
+			image = image.resize((processor.size['shortest_edge'], processor.size['shortest_edge']))
 			image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
 			image = image.unsqueeze(0)
 		else:
