@@ -1064,7 +1064,7 @@ class LazySupervisedDataset(Dataset):
 		image_aspect_ratio = self.data_args.image_aspect_ratio
 		if overwrite_image_aspect_ratio is not None:
 			image_aspect_ratio = overwrite_image_aspect_ratio
-		if image_aspect_ratio not in ['pad', 'anyres']:
+		if image_aspect_ratio not in ['pad', 'anyres', 'square']:
 			raise NotImplementedError("Only pad and anyres is supported for now.")
 
 		image2crops_num = 1
@@ -1085,6 +1085,9 @@ class LazySupervisedDataset(Dataset):
 					result.paste(pil_img, ((height - width) // 2, 0))
 					return result
 			image = expand2square(image, tuple(int(x * 255) for x in processor.image_mean))
+			image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
+			image = image.unsqueeze(0)
+		else:
 			image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
 			image = image.unsqueeze(0)
 		return image, image_size, image2crops_num
