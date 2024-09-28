@@ -1087,9 +1087,9 @@ class LazySupervisedDataset(Dataset):
 			image = expand2square(image, tuple(int(x * 255) for x in processor.image_mean))
 			image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
 			image = image.unsqueeze(0)
-		else:
-			image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
-			image = image.unsqueeze(0)
+		# else:
+		# 	image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
+		# 	image = image.unsqueeze(0)
 		return image, image_size, image2crops_num
 	
 	def __getitem__(self, i) -> Dict[str, torch.Tensor]:
