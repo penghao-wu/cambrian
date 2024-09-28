@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_square_pretrain" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_resize_pretrain" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
