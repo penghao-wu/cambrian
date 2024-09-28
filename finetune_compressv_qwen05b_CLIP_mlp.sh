@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="compressv_qwen05b_CLIP_mlp_2scale_layer12_dim896_finetune_738k_debug" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_2scale_layer12_dim448_2stagefix_finetune_737k" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -12,7 +12,7 @@ python cambrian/train/train_tpu.py \
     --version qwen_1_5 \
     --data_path ./llava_next_raw_format_processed.jsonl\
     --image_folder ./llava_next \
-    --pretrain_mm_mlp_adapter ./compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_pretrain/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./compressv_qwen05b_CLIP_mlp_2scale_layer12_shareGPT4V_pretrain_stage2fix/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --max_num_image_crops 1 \
