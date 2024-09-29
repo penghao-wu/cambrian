@@ -5,16 +5,16 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_2scale_layer11_finetune_2stagefix_737k" &&
+export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_2scale_layer11_resize_finetune_738k" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
     --model_name_or_path "lmsys/vicuna-7b-v1.5" \
     --version v1 \
-    --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
-    --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./compressv_vicuna7b_CLIP_mlp_2scale_layer11_shareGPT4V_pretrain_stage2fix/mm_projector.bin \
+    --data_path ./llava_next_raw_format_processed.jsonl\
+    --image_folder ./llava_next \
+    --pretrain_mm_mlp_adapter ./compressv_vicuna7b_CLIP_mlp_2scale_layer11_shareGPT4V_resize_pretrain/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --max_num_image_crops 1 \
