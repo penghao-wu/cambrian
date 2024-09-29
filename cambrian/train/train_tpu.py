@@ -3,8 +3,6 @@ from cambrian.train.train_fsdp_multi import train
 
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-import wandb
-wandb.login(key='618eb3b78242f01000855a123d29e2ac98a60f30')
 if __name__ == "__main__":
     #train()
     import multiprocessing as mp
