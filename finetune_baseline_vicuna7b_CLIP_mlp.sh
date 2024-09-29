@@ -3,6 +3,8 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
+export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
+export WANDB_PROJECT="compressv" &&
 export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_baseline_finetune_737k" &&
 
 # export TPU_PROCESS_BOUNDS=1,1,1 &&
@@ -34,7 +36,7 @@ python cambrian/train/train_tpu.py \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
-    --image_aspect_ratio pad \
+    --image_aspect_ratio resize \
     --group_by_modality_length True \
     --bf16 False \
     --output_dir $CKPT_DIR \

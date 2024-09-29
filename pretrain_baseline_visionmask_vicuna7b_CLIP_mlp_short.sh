@@ -5,34 +5,32 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_qwen05b_CLIP_mlp_2scale_layer12_shareGPT4V_pretrain_stage2fix" &&
+export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_baseline_shareGPT4V_resize_pretrain" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path "Qwen/Qwen2-0.5B-Instruct" \
-    --version qwen_1_5 \
+    --model_name_or_path "lmsys/vicuna-7b-v1.5" \
+    --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
-    --pretrain_mm_mlp_adapter ./compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_pretrain/mm_projector.bin \
+    --mask_vision True \
+    --mask_vision_start_layer 0 \
     --max_num_image_crops 1 \
     --per_crop_token_len 576 \
-    --compress_reduce_factor 4 \
-    --compress_v True \
-    --compress_v_start_layer 12 \
-    --mm_vision_mlp_lr 1e-4 \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \
-    --image_position 14 \
+    --image_position 35 \
     --vision_hidden_size 1024 \
     --connector_only True \
     --num_of_vision_sampler_layers 10 \
     --start_of_vision_sampler_layers 0 \
     --stride_of_vision_sampler_layers 3 \
     --mm_projector_type mlp2x_gelu \
+    --mm_vision_sampler_lr 1e-4 \
     --tune_mm_mlp_adapter True \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
@@ -48,7 +46,7 @@ python cambrian/train/train_tpu.py \
     --save_strategy "steps" \
     --save_steps 100000 \
     --save_total_limit 1 \
-    --learning_rate 1e-4 \
+    --learning_rate 1e-3 \
     --weight_decay 0. \
     --warmup_ratio 0.06 \
     --lr_scheduler_type "cosine" \
