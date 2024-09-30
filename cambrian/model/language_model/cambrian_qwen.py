@@ -58,16 +58,12 @@ def get_image_compress(hidden_states_image_full, compress_reduce_factor, per_cro
 
 	hidden_states_image_full = hidden_states_image_full.view(bs*num_image_crops, h_full, w_full, -1)
 	
-	# hidden_states_image_compress = nn.functional.interpolate(
-	# hidden_states_image_full.permute(0, 3, 1, 2).contiguous(),
-	# 	size=(h_compress, w_compress),
-	# 	mode='bilinear',
-	# 	align_corners=False
-	# )
-	hidden_states_image_compress = nn.AvgPool2d(
-		kernel_size=(h_full // h_compress, w_full // w_compress),
-		stride=(h_full // h_compress, w_full // w_compress),
-	)(hidden_states_image_full.permute(0, 3, 1, 2).contiguous())
+	hidden_states_image_compress = nn.functional.interpolate(
+	hidden_states_image_full.permute(0, 3, 1, 2).contiguous(),
+		size=(h_compress, w_compress),
+		mode='bilinear',
+		align_corners=False
+	)
 	hidden_states_image_compress = hidden_states_image_compress.permute(0, 2, 3, 1).contiguous().view(bs, num_image_crops*h_compress*w_compress, -1)
 	return hidden_states_image_compress
 
