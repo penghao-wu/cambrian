@@ -1272,16 +1272,19 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 		attention_mask_image_compress = torch.zeros((dummy_num*height_compress*width_compress,), dtype=torch.bool)
 		position_ids_image_compress = torch.full((dummy_num*height_compress*width_compress,), max_length-1, dtype=torch.long)
 	else:
+		attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
+		position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long)
+
+
 		attention_mask_image_full_withnewline = torch.ones((height * width+1,), dtype=torch.bool)
-		position_ids_image_full_withnewline = (attention_mask_image_full_withnewline.cumsum(0)-1).to(torch.long)
+		position_ids_image_full_withnewline = (attention_mask_image_full_withnewline.cumsum(0)-1).to(torch.long) + position_ids_image_compress.max() + 1
 
 		attention_mask_image_full = attention_mask_image_full_withnewline[:-1]
 		attention_mask_newline_full = attention_mask_image_full_withnewline[-1:]
 		position_ids_image_full = position_ids_image_full_withnewline[:-1]
 		position_ids_newline_full = position_ids_image_full_withnewline[-1:]
 
-		attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
-		position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long) + position_ids_image_full_withnewline.max() + 1
+		
 
 	
 	image_info = {}
