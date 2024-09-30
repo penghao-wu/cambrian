@@ -58,12 +58,16 @@ def get_image_compress(hidden_states_image_full, compress_reduce_factor, per_cro
 
 	hidden_states_image_full = hidden_states_image_full.view(bs*num_image_crops, h_full, w_full, -1)
 	
-	hidden_states_image_compress = nn.functional.interpolate(
-	hidden_states_image_full.permute(0, 3, 1, 2).contiguous(),
-		size=(h_compress, w_compress),
-		mode='bilinear',
-		align_corners=False
-	)
+	# hidden_states_image_compress = nn.functional.interpolate(
+	# hidden_states_image_full.permute(0, 3, 1, 2).contiguous(),
+	# 	size=(h_compress, w_compress),
+	# 	mode='bilinear',
+	# 	align_corners=False
+	# )
+	hidden_states_image_compress = nn.AvgPool2d(
+		kernel_size=(h_full // h_compress, w_full // w_compress),
+		stride=(h_full // h_compress, w_full // w_compress),
+	)(hidden_states_image_full.permute(0, 3, 1, 2).contiguous())
 	hidden_states_image_compress = hidden_states_image_compress.permute(0, 2, 3, 1).contiguous().view(bs, num_image_crops*h_compress*w_compress, -1)
 	return hidden_states_image_compress
 
@@ -127,7 +131,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				all_hidden_states += (hidden_states,)
 
 			if not compress_v or layer_i < compress_v_start_layer:
-				print(layer_i, (hidden_states_image_full.mean(), hidden_states_image_full.var()), (hidden_states_newline_full.mean(), hidden_states_newline_full.var()), (hidden_states_text.mean(), hidden_states_text.var()))
+
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
 						decoder_layer.__call__,
@@ -157,10 +161,6 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 					)
 				
 				hidden_states = layer_outputs[0]
-
-				hidden_states_image_full = hidden_states[:, :len_image_full]
-				hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
-				hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
 							
 			else:
 				if layer_i == compress_v_start_layer:
@@ -177,7 +177,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 					position_ids_compress_q = torch.cat([position_ids_image_compress, position_ids_newline_full, position_ids_text], 1)
 					position_ids_compress_kv = torch.cat([position_ids_image_compress, position_ids_image_full,  position_ids_newline_full, position_ids_text], 1)
 
-				print('compress', layer_i, (hidden_states_image_compress.mean(), hidden_states_image_compress.var()), (hidden_states_image_full.mean(), hidden_states_image_full.var()), (hidden_states_newline_full.mean(), hidden_states_newline_full.var()), (hidden_states_text.mean(), hidden_states_text.var()))
+
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
 						decoder_layer.__call__,
