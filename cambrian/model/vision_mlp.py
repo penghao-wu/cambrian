@@ -9,7 +9,7 @@ class VisionMLP(nn.Module):
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size, intermediate_size, bias=False),
+			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
 			nn.SiLU(),
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
@@ -28,8 +28,7 @@ class VisionMLP(nn.Module):
 		image_compress = self.context_proj(image_compress)
 		residual = image_full
 		image_full = self.input_proj(image_full)
-		# image_full = torch.cat([image_full, image_compress], -1)
-		image_full = image_full + image_compress
+		image_full = torch.cat([image_full, image_compress], -1)
 		image_full = self.layernorm_post(self.proj(image_full) + residual) 
 
 		image_full = image_full.view(bs, num_image_crops*side_len_full*side_len_full, -1)
