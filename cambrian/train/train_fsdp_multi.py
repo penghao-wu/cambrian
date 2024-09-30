@@ -1281,7 +1281,7 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 		position_ids_newline_full = position_ids_image_full_withnewline[-1:]
 
 		attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
-		position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long) + position_ids_image_full_withnewline.max() + 1
+		position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long)
 
 	
 	image_info = {}
@@ -1495,7 +1495,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 	len_image_full = max_num_image_crops*per_crop_token_len
 	len_image_compress = max_num_image_crops*(per_crop_token_len//compress_reduce_factor**2)
 	# compress can't see full
-	# attention_mask_compress_4d[:, :, :len_image_compress, len_image_compress:len_image_compress+len_image_full] = min_dtype
+	attention_mask_compress_4d[:, :, :len_image_compress, len_image_compress:len_image_compress+len_image_full] = min_dtype
 	# others can't see compress
 	attention_mask_compress_4d[:, :, len_image_compress:, :len_image_compress] = min_dtype
 
