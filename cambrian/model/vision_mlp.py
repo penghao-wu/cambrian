@@ -8,9 +8,9 @@ class VisionMLP(nn.Module):
 		super().__init__()
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.gate = nn.Sequential(nn.Linear(intermediate_size, intermediate_size, bias=False), nn.Sigmoid())
+		# self.gate = nn.Sequential(nn.Linear(intermediate_size, intermediate_size, bias=False), nn.Sigmoid())
 		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size, intermediate_size, bias=False),
+			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
 			nn.SiLU(),
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
@@ -29,9 +29,9 @@ class VisionMLP(nn.Module):
 		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2)
 		residual = image_full
 		image_full = self.input_proj(image_full)
-		# image_full = torch.cat([image_full, image_compress], -1)
-		comb_weight = self.gate(image_full + image_compress)
-		image_full = comb_weight * image_full + (1 - comb_weight) * image_compress
+		image_full = torch.cat([image_full, image_compress], -1)
+		# comb_weight = self.gate(image_full + image_compress)
+		# image_full = comb_weight * image_full + (1 - comb_weight) * image_compress
 		image_full = self.layernorm_post(self.proj(image_full) + residual) 
 
 		image_full = image_full.view(bs, num_image_crops*side_len_full*side_len_full, -1)

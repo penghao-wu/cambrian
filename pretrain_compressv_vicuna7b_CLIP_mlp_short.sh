@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_2scale_gate_layer11_shareGPT4V_resize_pretrain_lr1e4" &&
+export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_2scale_updatecompress_layer11_shareGPT4V_resize_pretrain_lr1e4" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
