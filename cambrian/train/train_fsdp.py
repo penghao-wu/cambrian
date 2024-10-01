@@ -1077,15 +1077,20 @@ class LazySupervisedDataset(Dataset):
 					result.paste(pil_img, ((height - width) // 2, 0))
 					# result.paste(pil_img, (0, 0))
 					return result
-			if self.data_args.image_aspect_ratio != 'pad':
+			if self.data_args.image_aspect_ratio not in ['pad', 'resize']:
 				raise NotImplementedError("Only pad is supported for now.")
 			
 			image_aux_list = []
 			for processor_aux in processor_aux_list:
 				image_aux = image
 				target_resolution = processor_aux.crop_size['height']
-				image_aux =  expand2square(image_aux, tuple(int(x*255) for x in processor_aux.image_mean)).resize((target_resolution, target_resolution))
-				image_aux = processor_aux.preprocess(image_aux, return_tensors='pt')['pixel_values'][0]
+				if self.data_args.image_aspect_ratio == "pad":
+					image_aux =  expand2square(image_aux, tuple(int(x*255) for x in processor_aux.image_mean)).resize((target_resolution, target_resolution))
+					image_aux = processor_aux.preprocess(image_aux, return_tensors='pt')['pixel_values'][0]
+				elif self.data_args.image_aspect_ratio == "resize":
+					image_aux = image.resize((processor_aux.size['shortest_edge'], processor_aux.size['shortest_edge']))
+					image_aux = processor_aux.preprocess(image_aux, return_tensors="pt")["pixel_values"][0]
+				
 				image_aux_list.append(image_aux)
 
 			sources = preprocess_multimodal(

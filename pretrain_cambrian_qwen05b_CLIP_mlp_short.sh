@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_2scale_dim448_skip12_24_shareGPT4V_pretrain_lr1e4_old" &&
+export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_2scale_dim448_skip12_24_shareGPT4V_pretrain_resize_lr1e4_old" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -31,7 +31,7 @@ python cambrian/train/train_tpu.py \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
-    --image_aspect_ratio pad \
+    --image_aspect_ratio resize \
     --bf16 False \
     --output_dir $CKPT_DIR \
     --num_train_epochs 1 \
