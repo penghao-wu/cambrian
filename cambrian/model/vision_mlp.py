@@ -30,7 +30,7 @@ class VisionMLP(nn.Module):
 		residual = image_full
 		image_full = self.input_proj(image_full)
 		# image_full = torch.cat([image_full, image_compress], -1)
-		comb_weight = self.proj(image_full + image_compress)
+		comb_weight = self.gate(image_full + image_compress)
 		image_full = comb_weight * image_full + (1 - comb_weight) * image_compress
 		image_full = self.layernorm_post(self.proj(image_full) + residual) 
 
