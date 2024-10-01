@@ -32,7 +32,6 @@ python cambrian/train/train_tpu.py \
     --start_of_vision_sampler_layers 0 \
     --stride_of_vision_sampler_layers 3 \
     --mm_projector_type mlp2x_gelu \
-    --mm_vision_sampler_lr 1e-4 \
     --tune_mm_mlp_adapter True \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
