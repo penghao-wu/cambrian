@@ -1859,6 +1859,7 @@ def train(INDEX, attn_implementation=None):
 	trainer = CambrianTrainer(model=model,
 					tokenizer=tokenizer,
 					args=training_args,
+					extra_losses=["lm_loss"],
 					# extra_losses=["lm_loss", "aux_loss"],
 					**data_module)
 	trainer.is_fsdp_enabled = True

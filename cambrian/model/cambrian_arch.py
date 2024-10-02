@@ -229,8 +229,8 @@ class CambrianMetaModel:
 				self.vision_query.data = mm_projector_weights['model.vision_query']
 			self.image_newline.data = mm_projector_weights['model.image_newline']
 			if compress_v:
-				for i in range(self.config.num_hidden_layers):
-					incompatible_keys = self.layers[i].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
+				for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers):
+					incompatible_keys = self.layers[layer_idx].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
 					print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
 
 				# incompatible_keys = self.vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, "vision_mlp_layers"), strict=False)
