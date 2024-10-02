@@ -3,7 +3,7 @@
 export PJRT_DEVICE=TPU &&
 export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
-export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_576_shareGPT4V_pretrain_old_nounpad" &&
+export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_576_shareGPT4V_pretrain_square_plain" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
