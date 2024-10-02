@@ -1856,7 +1856,7 @@ def train(INDEX, attn_implementation=None):
 	elif model_args.version == "llama_v3":
 		tokenizer.pad_token = "<|reserved_special_token_0|>"
 		tokenizer.pad_token_id = 128002
-	elif "qwen" in model_args.version:
+	elif "qwen" in model_args.version or "qwen" in model_name.lower():
 		tokenizer.pad_token = "<|endoftext|>"
 		tokenizer.pad_token_id = 151643
 	else:
