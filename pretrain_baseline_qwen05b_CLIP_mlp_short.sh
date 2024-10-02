@@ -7,6 +7,9 @@ export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
 export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_square_pretrain_TPU" &&
 
+export TPU_PROCESS_BOUNDS=1,1,1 &&
+export TPU_VISIBLE_CHIPS=0 &&
+
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
