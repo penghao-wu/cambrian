@@ -11,7 +11,7 @@ export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
     --model_name_or_path "lmsys/vicuna-7b-v1.5" \
-    --version v1 \
+    --version plain \
     --data_path /mnt/disks/storage/data/pretrain_data/sbu558k/blip_laion_cc_sbu_558k.jsonl \
     --image_folder /mnt/disks/storage/data/pretrain_data/sbu558k \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
