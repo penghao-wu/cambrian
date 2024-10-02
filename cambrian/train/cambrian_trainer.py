@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Un
 from transformers.utils import is_apex_available
 if is_apex_available():
     from apex import amp
-# from custom_hf_trainer import CustomTrainer
+from custom_hf_trainer import CustomTrainer
 import random
 fs = gcsfs.GCSFileSystem(project='nyu-vision-lab')
 
@@ -198,7 +198,7 @@ def map_params_to_module_names(model_list):
     return param_to_name
 
 
-class CambrianTrainer(Trainer):
+class CambrianTrainer(CustomTrainer):
 
     def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
         if self.train_dataset is None or not has_length(self.train_dataset):
