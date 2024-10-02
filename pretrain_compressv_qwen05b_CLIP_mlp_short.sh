@@ -19,8 +19,8 @@ python cambrian/train/train_tpu.py \
     --max_num_image_crops 1 \
     --per_crop_token_len 576 \
     --compress_reduce_factor 4 \
-    --compress_v False \
-    --compress_v_start_layer 12 \
+    --compress_v True \
+    --compress_v_start_layer 0 \
     --mm_vision_mlp_lr 1e-4 \
     --num_query_group 1 \
     --query_num_list '[576]' \
