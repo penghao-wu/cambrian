@@ -6,12 +6,13 @@ export WANDB_RESUME="allow" &&
 export CKPT_NAME="cambrian_qwen05b_CLIP_mlp_576_shareGPT4V_pretrain_old_nounpad" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
-
+export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
+export WANDB_PROJECT="compressv" &&
 python cambrian/train/train_tpu.py \
     --model_name_or_path "Qwen/Qwen2-0.5B-Instruct" \
     --version qwen_1_5 \
-    --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
-    --image_folder /mnt/disks/storage/data/finetune_data \
+    --data_path /mnt/disks/storage/data/pretrain_data/sbu558k/blip_laion_cc_sbu_558k.jsonl \
+    --image_folder /mnt/disks/storage/data/pretrain_data/sbu558k \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --image_token_len 576 \
@@ -30,11 +31,11 @@ python cambrian/train/train_tpu.py \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
-    --image_aspect_ratio pad \
+    --image_aspect_ratio square \
     --bf16 False \
     --output_dir $CKPT_DIR \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 4 \
+    --per_device_train_batch_size 2 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy "no" \

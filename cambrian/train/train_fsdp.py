@@ -1073,14 +1073,15 @@ class LazySupervisedDataset(Dataset):
                     result.paste(pil_img, ((height - width) // 2, 0))
                     # result.paste(pil_img, (0, 0))
                     return result
-            if self.data_args.image_aspect_ratio != 'pad':
-                raise NotImplementedError("Only pad is supported for now.")
+            # if self.data_args.image_aspect_ratio != 'pad':
+            #     raise NotImplementedError("Only pad is supported for now.")
             
             image_aux_list = []
             for processor_aux in processor_aux_list:
                 image_aux = image
                 target_resolution = processor_aux.crop_size['height']
-                image_aux =  expand2square(image_aux, tuple(int(x*255) for x in processor_aux.image_mean)).resize((target_resolution, target_resolution))
+                if self.data_args.image_aspect_ratio == 'pad':
+                    image_aux =  expand2square(image_aux, tuple(int(x*255) for x in processor_aux.image_mean)).resize((target_resolution, target_resolution))
                 image_aux = processor_aux.preprocess(image_aux, return_tensors='pt')['pixel_values'][0]
                 image_aux_list.append(image_aux)
 
@@ -1782,7 +1783,7 @@ def train(INDEX, attn_implementation=None):
     elif model_args.version == "llama_v3":
         tokenizer.pad_token = "<|reserved_special_token_0|>"
         tokenizer.pad_token_id = 128002
-    elif "qwen" in model_args.version:
+    elif "qwen" in model_args.version or "qwen" in model_name.lower():
         tokenizer.pad_token = "<|endoftext|>"
         tokenizer.pad_token_id = 151643
     else:
