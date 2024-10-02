@@ -64,7 +64,8 @@ class VisionMLP_sa(nn.Module):
 		residual = image_full
 		image_full = self.input_proj(image_full)
 		image_full = torch.cat([image_full, image_compress], -1)
-		image_full = self.layernorm_post(self.proj(image_full) + residual) 
+		# image_full = self.layernorm_post(self.proj(image_full) + residual) 
+		image_full = self.proj(image_full)
 
 		image_full = image_full.view(bs, num_image_crops*side_len_full*side_len_full, -1)
 
