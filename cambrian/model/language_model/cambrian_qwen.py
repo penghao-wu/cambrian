@@ -239,7 +239,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 			all_hidden_states += (hidden_states,)
 
 		next_cache = None
-		aux_loss_total = torch.zeros((1)).to(device=hidden_states.device, dtype=hidden_states.dtype)
+		aux_loss_total = 0
 		if not return_dict:
 			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
 		return BaseModelOutputWithPastWithAuxLoss(
@@ -588,7 +588,7 @@ def decoder_forward(
 			hidden_states = hidden_states[:, len_image_full:]
 		hidden_states = self.mlp(hidden_states)
 		if fast_vision:
-			hidden_states_image_full =  self.vision_mlp_layers.sa(hidden_states_image_full, hidden_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
+			hidden_states_image_full =  self.vision_mlp_layers.ffn(hidden_states_image_full, hidden_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
 			hidden_states_image_full = hidden_states_image_full + hidden_states_image_full_residual
 		hidden_states = residual + hidden_states
 
