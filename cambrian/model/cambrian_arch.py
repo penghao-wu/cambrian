@@ -203,7 +203,7 @@ class CambrianMetaModel:
 					# 	)
 					
 					for i in range(self.config.num_hidden_layers):
-						self.layers[i].vision_sampler_layers = VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor)
+						self.layers[i].vision_mlp_layers = VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor)
 
 		else:
 			# In case it is frozen by LoRA
