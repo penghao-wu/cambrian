@@ -44,6 +44,27 @@ from cambrian.utils import IS_XLA_AVAILABLE
 from transformers import Qwen2Config, Qwen2Model, Qwen2ForCausalLM
 
 logger = logging.get_logger(__name__)
+
+from dataclasses import dataclass
+@dataclass
+class CausalLMOutputWithPastWithAuxLoss(CausalLMOutputWithPast):
+	loss: Optional[torch.FloatTensor] = None
+	logits: torch.FloatTensor = None
+	past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+	hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+	attentions: Optional[Tuple[torch.FloatTensor]] = None
+	lm_loss: Optional[torch.FloatTensor] = None
+	aux_loss: Optional[torch.FloatTensor] = None
+
+
+@dataclass
+class BaseModelOutputWithPastWithAuxLoss(BaseModelOutputWithPast):
+	last_hidden_state: torch.FloatTensor = None
+	past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+	hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+	attentions: Optional[Tuple[torch.FloatTensor]] = None
+	aux_loss: Optional[torch.FloatTensor] = None
+
 class CambrianConfig(Qwen2Config):
 	model_type = "cambrian_qwen"
 
@@ -218,14 +239,15 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 			all_hidden_states += (hidden_states,)
 
 		next_cache = None
-
+		aux_loss_total = 0
 		if not return_dict:
-			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
-		return BaseModelOutputWithPast(
+			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
+		return BaseModelOutputWithPastWithAuxLoss(
 			last_hidden_state=hidden_states,
 			past_key_values=next_cache,
 			hidden_states=all_hidden_states,
 			attentions=all_self_attns,
+			aux_loss=aux_loss_total,
 		)
 
 
@@ -355,17 +377,23 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 			# Enable model parallelism
 			shift_labels = shift_labels.to(shift_logits.device)
 			loss = loss_fct(shift_logits, shift_labels)
-
+		aux_loss_total = outputs.aux_loss * 0.1
+		total_loss = loss + aux_loss_total
+		total_loss = loss
 		if not return_dict:
 			output = (logits,) + outputs[1:]
+			return {'loss':total_loss, 'logits':logits, 'past_key_values':past_key_values, 'hidden_states':hidden_states, 'lm_loss':loss, 'aux_loss':aux_loss_total}
 			return (loss,) + output if loss is not None else output
 
-		return CausalLMOutputWithPast(
-			loss=loss,
+		return CausalLMOutputWithPastWithAuxLoss(
+			loss=total_loss,
 			logits=logits,
 			past_key_values=outputs.past_key_values,
 			hidden_states=outputs.hidden_states,
 			attentions=outputs.attentions,
+			lm_loss=loss,
+			aux_loss=aux_loss_total
+
 		)
 
 
