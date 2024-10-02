@@ -1133,7 +1133,7 @@ class LazySupervisedDataset(Dataset):
 		#sources = self.list_data_dict[i]
 		with open(self.data_path, 'r') as file:
 			for idx, line in enumerate(file):
-				if idx == 0:
+				if idx == i:
 					sources = json.loads(line.strip())
 					break
 		dat = sources
