@@ -581,15 +581,16 @@ def decoder_forward(
 		residual = hidden_states
 		if fast_vision:
 			hidden_states_image_full_residual = hidden_states_image_full
-		hidden_states = self.post_attention_layernorm(hidden_states)
 		if fast_vision:
 			hidden_states = self.post_attention_layernorm(torch.cat([hidden_states_image_full, hidden_states], 1))
 			hidden_states_image_full = hidden_states[:, :len_image_full]
 			hidden_states = hidden_states[:, len_image_full:]
-		hidden_states = self.mlp(hidden_states)
+		else:
+			hidden_states = self.post_attention_layernorm(hidden_states)
 		if fast_vision:
-			hidden_states_image_full =  self.vision_mlp_layers.ffn(hidden_states_image_full, hidden_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
+			hidden_states_image_full =  self.vision_mlp_layers.ffn(hidden_states_image_full, int((len_image_full//len_image_compress)**0.5), len_image_full)
 			hidden_states_image_full = hidden_states_image_full + hidden_states_image_full_residual
+		hidden_states = self.mlp(hidden_states)
 		hidden_states = residual + hidden_states
 
 		outputs = (hidden_states,)

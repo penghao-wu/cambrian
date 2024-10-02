@@ -81,7 +81,7 @@ class VisionMLP_ffn(nn.Module):
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
 
-	def forward(self, image_full, image_compress, compress_reduce_factor, per_crop_token_len=576, attention_mask=None):
+	def forward(self, image_full, compress_reduce_factor, per_crop_token_len=576, attention_mask=None):
 		image_full = self.proj(image_full)
 
 		return image_full
