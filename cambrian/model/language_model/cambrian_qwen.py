@@ -206,7 +206,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				hidden_states_newline_full = layer_outputs[0][:, len_image_compress:len_image_compress+len_newline_full]
 				hidden_states_text = layer_outputs[0][:, len_image_compress+len_newline_full:]
 
-				hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
+				hidden_states_image_full = layer_outputs[-1]
 
 				if layer_i == len(self.layers) - 1:
 					hidden_states = torch.cat([hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1)
@@ -220,7 +220,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		next_cache = None
 
 		if not return_dict:
-			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
+			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
 		return BaseModelOutputWithPast(
 			last_hidden_state=hidden_states,
 			past_key_values=next_cache,
@@ -523,6 +523,8 @@ def decoder_forward(
 			residual = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
 			hidden_states = self.input_layernorm(hidden_states)
 			kv_states = hidden_states
+			hidden_states_image_full = hidden_states[:, :len_image_full]
+			hidden_states_image_full_residual = hidden_states_image_full
 			hidden_states = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
 		else:
 			residual = hidden_states
@@ -541,12 +543,25 @@ def decoder_forward(
 			use_cache=use_cache,
 			**kwargs,
 		)
+		if fast_vision:
+			hidden_states_image_compress = hidden_states[:, :len_image_compress]
+			hidden_states_image_full = self.vision_mlp_layers.sa(hidden_states_image_full, hidden_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
+			hidden_states_image_full = hidden_states_image_full + hidden_states_image_full_residual
 		hidden_states = residual + hidden_states
 
 		# Fully Connected
 		residual = hidden_states
+		if fast_vision:
+			hidden_states_image_full_residual = hidden_states_image_full
 		hidden_states = self.post_attention_layernorm(hidden_states)
+		if fast_vision:
+			hidden_states = self.post_attention_layernorm(torch.cat([hidden_states_image_full, hidden_states], 1))
+			hidden_states_image_full = hidden_states[:, :len_image_full]
+			hidden_states = hidden_states[:, len_image_full:]
 		hidden_states = self.mlp(hidden_states)
+		if fast_vision:
+			hidden_states_image_full =  self.vision_mlp_layers.sa(hidden_states_image_full, hidden_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
+			hidden_states_image_full = hidden_states_image_full + hidden_states_image_full_residual
 		hidden_states = residual + hidden_states
 
 		outputs = (hidden_states,)
@@ -556,6 +571,9 @@ def decoder_forward(
 
 		if use_cache:
 			outputs += (present_key_value,)
+
+		if fast_vision:
+			outputs += (hidden_states_image_full, )
 
 		return outputs
 

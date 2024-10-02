@@ -198,9 +198,12 @@ class CambrianMetaModel:
 					num_of_vision_mlp_layers = self.config.num_hidden_layers - compress_v_start_layer
 					self.config.num_of_vision_mlp_layers = num_of_vision_mlp_layers
 					hidden_size_reduce_factor = 4 if self.config.hidden_size >= 1024 else 2
-					self.vision_mlp_layers = nn.ModuleList(
-						[VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor) for layer_idx in range(0, num_of_vision_mlp_layers)]
-						)
+					# self.vision_mlp_layers = nn.ModuleList(
+					# 	[VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor) for layer_idx in range(0, num_of_vision_mlp_layers)]
+					# 	)
+					
+					for i in range(self.config.num_hidden_layers):
+						self.layers[i].vision_sampler_layers = VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor)
 
 		else:
 			# In case it is frozen by LoRA
@@ -226,8 +229,12 @@ class CambrianMetaModel:
 				self.vision_query.data = mm_projector_weights['model.vision_query']
 			self.image_newline.data = mm_projector_weights['model.image_newline']
 			if compress_v:
-				incompatible_keys = self.vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, "vision_mlp_layers"), strict=False)
-				print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
+				for i in range(self.config.num_hidden_layers):
+					incompatible_keys = self.layers[i].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
+					print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
+
+				# incompatible_keys = self.vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, "vision_mlp_layers"), strict=False)
+				# print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
 
 
 def unmask_attention_mask(mask, original_size):
