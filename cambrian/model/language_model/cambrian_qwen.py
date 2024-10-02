@@ -377,7 +377,9 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 			# Enable model parallelism
 			shift_labels = shift_labels.to(shift_logits.device)
 			loss = loss_fct(shift_logits, shift_labels)
-			assert False, loss
+			data_dict = {'logits':logits.detach().cpu(),'labels':labels.detach().cpu() }
+			torch.save(data_dict, 'data_TPU.pth')
+			assert False
 		aux_loss_total = outputs.aux_loss * 0.1
 		total_loss = loss + aux_loss_total
 		total_loss = loss
