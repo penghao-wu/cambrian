@@ -571,10 +571,10 @@ def decoder_forward(
 			use_cache=use_cache,
 			**kwargs,
 		)
-		if fast_vision:
-			hidden_states_image_compress = hidden_states[:, :len_image_compress]
-			hidden_states_image_full = self.vision_mlp_layers.sa(hidden_states_image_full, hidden_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
-			hidden_states_image_full = hidden_states_image_full + hidden_states_image_full_residual
+		# if fast_vision:
+		# 	hidden_states_image_compress = hidden_states[:, :len_image_compress]
+		# 	hidden_states_image_full = self.vision_mlp_layers.sa(hidden_states_image_full, hidden_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
+		# 	hidden_states_image_full = hidden_states_image_full + hidden_states_image_full_residual
 		hidden_states = residual + hidden_states
 
 		# Fully Connected
