@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Un
 from transformers.utils import is_apex_available
 if is_apex_available():
     from apex import amp
-# from custom_hf_trainer import CustomTrainer
+from custom_hf_trainer import CustomTrainer
 import random
 fs = gcsfs.GCSFileSystem(project='nyu-vision-lab')
 
