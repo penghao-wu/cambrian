@@ -239,7 +239,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 			all_hidden_states += (hidden_states,)
 
 		next_cache = None
-		aux_loss_total = 0
+		aux_loss_total = torch.zeros((1)).to(device=hidden_states.device, dtype=hidden_states.dtype)
 		if not return_dict:
 			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
 		return BaseModelOutputWithPastWithAuxLoss(
