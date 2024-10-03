@@ -14,15 +14,16 @@ def svd_initi(decoder_layer, bias=False):
 	new_layer1 = decoder_layer.vision_mlp_layers.sa.proj1
 	new_layer2 = decoder_layer.vision_mlp_layers.sa.proj2
 
-	# Get dimensions
-	hidden_size = v_proj.in_features
-	dim1 = v_proj.out_features
 	dim2 = new_layer1.out_features
+
+	n_rep = o_proj.in_features // v_proj.out_features
 
 	# Extract weights and biases
 	W_v = v_proj.weight.data
+	W_v = W_v.repeat(n_rep, 1)
 	if bias:
 		b_v = v_proj.bias.data
+		b_v = b_v.repeat(n_rep)
 	W_o = o_proj.weight.data
 
 	# Compute the combined weight matrix and bias vector
