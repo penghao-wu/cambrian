@@ -140,7 +140,7 @@ class VisionMLP_ffn(nn.Module):
 		)
 
 	def forward(self, image_full, compress_reduce_factor, per_crop_token_len=576, attention_mask=None):
-		image_full = self.proj(image_full)
+		image_full = self.proj(image_full).to(image_full.dtype)
 
 		return image_full
 	
