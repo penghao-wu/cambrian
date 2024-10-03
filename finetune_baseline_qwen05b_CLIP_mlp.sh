@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_pad_masknoinit_layer0_finetune_738k_TPU" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_pad_maskinit_layer0_finetune_738k_TPU" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -14,7 +14,7 @@ python cambrian/train/train_tpu.py \
     --version qwen_1_5 \
     --data_path ./llava_next_raw_format_processed.jsonl\
     --image_folder ./llava_next \
-    --pretrain_mm_mlp_adapter ./compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_square_pretrain_TPU/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_mask_layer0_square_pretrain_TPU/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --max_num_image_crops 1 \
