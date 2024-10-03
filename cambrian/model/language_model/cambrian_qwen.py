@@ -144,16 +144,6 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
 
 
-		ee_attention_mask = attention_mask_regular_4d.clone()
-		bs = ee_attention_mask.shape[0]
-		min_dtype = torch.finfo(inputs_embeds.dtype).min
-		diag_masks = torch.full((len_image_full, len_image_full), min_dtype, dtype=ee_attention_mask.dtype, device=ee_attention_mask.device)
-		for j in range(len_image_full):
-			diag_masks[j, j] = 0
-		diag_masks = diag_masks.view(1, 1, len_image_full, len_image_full).repeat(bs, 1, 1, 1)
-		ee_attention_mask[:, :, :len_image_full, :len_image_full] = diag_masks
-		attention_mask_regular_4d = ee_attention_mask
-
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
