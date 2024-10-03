@@ -29,9 +29,9 @@ def svd_init(decoder_layer, bias=False):
 		b_v = v_proj.bias.data
 		b_v_repeat = []
 	for i in range(num_key_value_groups):
-		W_v_repeat.append(W_v[:, head_dim*i:head_dim*(i+1).repeat(n_rep, 1)])
+		W_v_repeat.append(W_v[:, head_dim*i:head_dim*(i+1)].repeat(n_rep, 1))
 		if bias:
-			b_v_repeat.b_v(W_v[head_dim*i:head_dim*(i+1).repeat(n_rep)])
+			b_v_repeat.append(b_v[head_dim*i:head_dim*(i+1)].repeat(n_rep))
 	W_v_repeat = torch.cat(W_v_repeat, 1)
 	W_v = W_v_repeat
 	if bias:
