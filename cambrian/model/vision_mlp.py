@@ -5,7 +5,7 @@ from torch import nn
 from transformers.models.llama.modeling_llama import LlamaRMSNorm
 
 @torch.no_grad()
-def svd_initi(decoder_layer, bias=False):
+def svd_init(decoder_layer, bias=False):
 	# Extract the original layers
 	v_proj = decoder_layer.self_attn.v_proj
 	o_proj = decoder_layer.self_attn.o_proj
