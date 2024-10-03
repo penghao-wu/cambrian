@@ -32,6 +32,7 @@ def svd_init(decoder_layer, bias=False):
 		if bias:
 			b_v_repeat.append(b_v[head_dim*i:head_dim*(i+1)].repeat(n_rep))
 	W_v_repeat = torch.cat(W_v_repeat, 1)
+	assert False, (num_key_value_heads, n_rep, W_v.shape, W_v_repeat.shape, W_v[:, head_dim*i:head_dim*(i+1)].repeat(n_rep, 1).shape)
 	W_v = W_v_repeat
 	if bias:
 		b_v_repeat = torch.cat(b_v_repeat)
