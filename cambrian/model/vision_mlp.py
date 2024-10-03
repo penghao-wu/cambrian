@@ -16,19 +16,18 @@ def svd_init(decoder_layer, bias=False):
 
 	dim2 = new_layer1.out_features
 
-	n_rep = o_proj.in_features // v_proj.out_features
-
 	# Extract weights and biases
 	W_v = v_proj.weight.data
 
 	num_key_value_groups = decoder_layer.self_attn.num_key_value_groups
-	n_rep = n_rep
+	n_rep = num_key_value_groups
+	num_key_value_heads = decoder_layer.self_attn.num_key_value_heads
 	head_dim = decoder_layer.self_attn.head_dim
 	W_v_repeat = []
 	if bias:
 		b_v = v_proj.bias.data
 		b_v_repeat = []
-	for i in range(num_key_value_groups):
+	for i in range(num_key_value_heads):
 		W_v_repeat.append(W_v[:, head_dim*i:head_dim*(i+1)].repeat(n_rep, 1))
 		if bias:
 			b_v_repeat.append(b_v[head_dim*i:head_dim*(i+1)].repeat(n_rep))
