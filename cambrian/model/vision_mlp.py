@@ -123,7 +123,7 @@ class VisionMLP_sa(nn.Module):
 	def __init__(self, config, intermediate_size=1024, bias=False):
 		super().__init__()
 		self.proj1 = nn.Linear(config.hidden_size, intermediate_size)
-		self.proj2 = nn.Linear(config.hidden_size, config.hidden_size, bias=bias)
+		self.proj2 = nn.Linear(intermediate_size, config.hidden_size, bias=bias)
 
 	def forward(self, image_full):
 		image_full = self.proj2(self.proj1(image_full))
