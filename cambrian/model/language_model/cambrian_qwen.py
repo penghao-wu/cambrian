@@ -197,7 +197,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 
 					position_ids_compress_q = torch.cat([position_ids_newline_full, position_ids_text], 1)
 					position_ids_compress_kv = torch.cat([position_ids_image_full,  position_ids_newline_full, position_ids_text], 1)
-					attention_mask_compress_4d = attention_mask_compress_4d[:, :, :len_image_compress, :len_image_compress]
+					attention_mask_compress_4d = attention_mask_compress_4d[:, :, len_image_compress:, len_image_compress:]
 
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
