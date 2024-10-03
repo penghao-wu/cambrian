@@ -232,9 +232,9 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				# hidden_states_newline_full = layer_outputs[0][:, len_image_compress:len_image_compress+len_newline_full]
 				# hidden_states_text = layer_outputs[0][:, len_image_compress+len_newline_full:]
 
-				hidden_states_image_compress = layer_outputs[0][:, :len_image_compress]
-				hidden_states_newline_full = layer_outputs[0][:, len_image_compress:len_image_compress+len_newline_full]
-				hidden_states_text = layer_outputs[0][:, len_image_compress+len_newline_full:]
+				hidden_states_image_full = layer_outputs[0][:, :len_image_full]
+				hidden_states_newline_full = layer_outputs[0][:, len_image_full:len_image_full+len_newline_full]
+				hidden_states_text = layer_outputs[0][:, len_image_full+len_newline_full:]
 
 				if layer_i == len(self.layers) - 1:
 					hidden_states = torch.cat([hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1)
