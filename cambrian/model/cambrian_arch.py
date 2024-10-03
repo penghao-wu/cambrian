@@ -24,7 +24,7 @@ from ezcolorlog import root_logger as logger
 from .multimodal_encoder.builder import build_vision_tower_aux_list
 from .multimodal_projector.builder import build_vision_projector
 # from .vision_sampler import VisionTokenSampler, VisionMLP, VisionSA
-from .vision_mlp import VisionMLP
+from .vision_mlp import VisionMLP, svd_initi
 
 from cambrian.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
@@ -204,7 +204,7 @@ class CambrianMetaModel:
 					
 					for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers):
 						self.layers[layer_idx].vision_mlp_layers = VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor)
-
+						svd_initi(self.layers[layer_idx])
 		else:
 			# In case it is frozen by LoRA
 			for p in self.mm_projector.parameters():
@@ -228,10 +228,10 @@ class CambrianMetaModel:
 					self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
 				self.vision_query.data = mm_projector_weights['model.vision_query']
 			self.image_newline.data = mm_projector_weights['model.image_newline']
-			if compress_v:
-				for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers):
-					incompatible_keys = self.layers[layer_idx].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
-					print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
+			# if compress_v:
+			# 	for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers):
+			# 		incompatible_keys = self.layers[layer_idx].vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_sampler_layers'.format(i)),strict=True)
+			# 		print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
 
 				# incompatible_keys = self.vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, "vision_mlp_layers"), strict=False)
 				# print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
