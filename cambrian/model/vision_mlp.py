@@ -20,10 +20,24 @@ def svd_init(decoder_layer, bias=False):
 
 	# Extract weights and biases
 	W_v = v_proj.weight.data
-	W_v = W_v.repeat(n_rep, 1)
+
+	num_key_value_groups = decoder_layer.num_key_value_groups
+	n_rep = n_rep
+	head_dim = decoder_layer.head_dim
+	W_v_repeat = []
 	if bias:
 		b_v = v_proj.bias.data
-		b_v = b_v.repeat(n_rep)
+		b_v_repeat = []
+	for i in range(num_key_value_groups):
+		W_v_repeat.append(W_v[:, head_dim*i:head_dim*(i+1).repeat(n_rep, 1)])
+		if bias:
+			b_v_repeat.b_v(W_v[head_dim*i:head_dim*(i+1).repeat(n_rep)])
+	W_v_repeat = torch.cat(W_v_repeat, 1)
+	W_v = W_v_repeat
+	if bias:
+		b_v_repeat = torch.cat(b_v_repeat)
+		b_v = b_v_repeat
+	
 	W_o = o_proj.weight.data
 
 	# Compute the combined weight matrix and bias vector
