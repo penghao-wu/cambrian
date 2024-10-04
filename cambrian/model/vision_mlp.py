@@ -45,7 +45,10 @@ def svd_init(decoder_layer, bias=False):
 		b = torch.matmul(b_v, W_o.t())
 
 	# Perform truncated SVD on the combined weight matrix
-	U, S, Vh = torch.linalg.svd(M, full_matrices=False)
+	U, S, Vh = torch.linalg.svd(M.float(), full_matrices=False)
+	U = U.to(W_o.dtype)
+	S = S.to(W_o.dtype)
+	Vh = Vh.to(W_o.dtype)
 	U_prime = U[:, :dim2]
 	S_prime = S[:dim2]
 	Vh_prime = Vh[:dim2, :]
