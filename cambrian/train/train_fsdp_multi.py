@@ -1297,7 +1297,7 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 	
 	return image_info
 
-def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.bfloat16):
+def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.float32):
 	min_dtype = torch.finfo(dtype).min
 	bs = position_ids_q.shape[0]
 	position_ids_q = position_ids_q.view(bs, -1, 1)
@@ -1924,8 +1924,8 @@ def train(INDEX, attn_implementation=None):
 			model.requires_grad_(False)
 			# for p in model.get_model().mm_projector.parameters():
 			#     p.requires_grad = True
-			# tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline', 'vision_mlp_layers']
-			tune_modules = ['vision_mlp_layers']
+			tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline', 'vision_mlp_layers']
+			# tune_modules = ['vision_mlp_layers']
 			for name, param in model.named_parameters():
 				if any(listed_name in name for listed_name in tune_modules):
 					print_rank0('tuning {}'.format(name))
