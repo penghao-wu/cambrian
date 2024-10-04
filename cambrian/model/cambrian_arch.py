@@ -213,7 +213,7 @@ class CambrianMetaModel:
 		if pretrain_mm_mlp_adapter is not None:
 			mm_projector_weights = torch.load(pretrain_mm_mlp_adapter, map_location='cpu')
 			def get_w(weights, keyword):
-				return {k.split(keyword + '.')[1]: v.to(torch.float) for k, v in weights.items() if keyword+'.' in k}
+				return {k.split(keyword + '.')[1]: v for k, v in weights.items() if keyword+'.' in k}
 
 			self.mm_projector.load_state_dict(get_w(mm_projector_weights, 'mm_projector'),strict=True)
 
@@ -228,10 +228,10 @@ class CambrianMetaModel:
 					self.vision_sampler_layers.load_state_dict(get_w(mm_projector_weights, 'vision_sampler_layers'),strict=True)
 				self.vision_query.data = mm_projector_weights['model.vision_query']
 			self.image_newline.data = mm_projector_weights['model.image_newline']
-			if compress_v:
-				for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers):
-					incompatible_keys = self.layers[layer_idx].vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_mlp_layers'.format(layer_idx)),strict=True)
-					print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
+			# if compress_v:
+			# 	for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers):
+			# 		incompatible_keys = self.layers[layer_idx].vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, 'layers.{}.vision_mlp_layers'.format(layer_idx)),strict=True)
+			# 		print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
 
 				# incompatible_keys = self.vision_mlp_layers.load_state_dict(get_w(mm_projector_weights, "vision_mlp_layers"), strict=False)
 				# print(f"Loaded vision mlp weights from {pretrain_mm_mlp_adapter}. Incompatible keys: {incompatible_keys}")
