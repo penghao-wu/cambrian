@@ -216,7 +216,8 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 					)
 				else:
 					layer_outputs = decoder_layer(
-						torch.cat([hidden_states_image_compress, hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1),
+						# torch.cat([hidden_states_image_compress, hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1),
+						torch.cat([hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1),
 						attention_mask_compress_4d,
 						position_ids_compress_q,
 						position_ids_compress_kv,
