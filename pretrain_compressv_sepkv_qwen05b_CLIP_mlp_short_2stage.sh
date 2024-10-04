@@ -59,9 +59,7 @@ python cambrian/train/train_tpu.py \
     --dataloader_num_workers 4 \
     --lazy_preprocess True \
     --report_to wandb \
-    --run_name $CKPT_NAME \
-    --fsdp "full_shard" \
-    --fsdp_config fsdp_config.json
+    --run_name $CKPT_NAME
 
 
 # CKPT_PATH=checkpoints/$CKPT_NAME

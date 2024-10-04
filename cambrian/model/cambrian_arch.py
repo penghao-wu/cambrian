@@ -198,13 +198,13 @@ class CambrianMetaModel:
 					num_of_vision_mlp_layers = self.config.num_hidden_layers - compress_v_start_layer
 					self.config.num_of_vision_mlp_layers = num_of_vision_mlp_layers
 					hidden_size_reduce_factor = 4 if self.config.hidden_size >= 1024 else 4
-					self.vision_mlp_layers = nn.ModuleList(
-						[VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor, bias=True) for layer_idx in range(0, num_of_vision_mlp_layers)]
-						)
+					# self.vision_mlp_layers = nn.ModuleList(
+					# 	[VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor) for layer_idx in range(0, num_of_vision_mlp_layers)]
+					# 	)
 					
 					for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers):
-					# 	self.layers[layer_idx].vision_mlp_layers = VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor, bias=True)
-						svd_init(self.layers[layer_idx], self.vision_mlp_layers[layer_idx-compress_v_start_layer], bias=True)
+						self.layers[layer_idx].vision_mlp_layers = VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor, bias=True)
+						svd_init(self.layers[layer_idx], bias=True)
 		else:
 			# In case it is frozen by LoRA
 			for p in self.mm_projector.parameters():
