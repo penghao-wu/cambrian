@@ -1974,7 +1974,7 @@ def train(INDEX, attn_implementation=None):
 	
 
 	if training_args.bf16:
-		model = model.to(dtype=torch.float32)
+		model = model.to(dtype=torch.bfloat16)
 
 	callbacks = []
 

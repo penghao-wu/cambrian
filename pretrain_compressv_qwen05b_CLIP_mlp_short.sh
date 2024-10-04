@@ -49,7 +49,7 @@ python cambrian/train/train_tpu.py \
     --save_total_limit 1 \
     --learning_rate 1e-3 \
     --weight_decay 0. \
-    --warmup_ratio 0.06 \
+    --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
     --tf32 False \
