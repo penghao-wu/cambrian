@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_qwen05b_CLIP_mlp_sepkv224_layer14_shareGPT4V_square_pretrain_joint" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_sepkv224_layer14_shareGPT4V_square_pretrain_stage2joint" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -16,6 +16,7 @@ python cambrian/train/train_tpu.py \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
+    --pretrain_mm_mlp_adapter ./compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_square_pretrain_TPU/mm_projector.bin \
     --max_num_image_crops 1 \
     --per_crop_token_len 576 \
     --compress_reduce_factor 4 \
@@ -47,7 +48,7 @@ python cambrian/train/train_tpu.py \
     --save_strategy "steps" \
     --save_steps 100000 \
     --save_total_limit 1 \
-    --learning_rate 1e-3 \
+    --learning_rate 1e-4 \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
