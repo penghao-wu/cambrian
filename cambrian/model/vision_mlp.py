@@ -11,8 +11,8 @@ def svd_init(decoder_layer, mlp_layer, bias=False):
 	o_proj = decoder_layer.self_attn.o_proj
 
 	# Extract the new layers
-	new_layer1 = mlp_layer.vision_mlp_layers.sa.proj1
-	new_layer2 = mlp_layer.vision_mlp_layers.sa.proj2
+	new_layer1 = mlp_layer.sa.proj1
+	new_layer2 = mlp_layer.sa.proj2
 
 	dim2 = new_layer1.out_features
 
