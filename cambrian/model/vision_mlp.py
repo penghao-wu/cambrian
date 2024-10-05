@@ -193,7 +193,6 @@ class VisionMLP_sa(nn.Module):
 		num_image_crops = image_full.shape[1]//per_crop_token_len
 		bs = image_full.shape[0]
 
-		image_full = image_full.view(bs*num_image_crops, side_len_full, side_len_full, -1)
 		image_compress = image_compress.view(bs*num_image_crops, side_len_compress, side_len_compress, -1)
 		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2).view(bs, num_image_crops*side_len_full*side_len_full, -1)
 
