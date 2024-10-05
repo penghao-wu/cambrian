@@ -143,7 +143,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
 		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
 
-
+		aux_loss_total = 0
 		for layer_i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
 				all_hidden_states += (hidden_states,)
@@ -238,7 +238,8 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				hidden_states_image_full = layer_outputs[0][:, :len_image_full]
 				hidden_states_newline_full = layer_outputs[0][:, len_image_full:len_image_full+len_newline_full]
 				hidden_states_text = layer_outputs[0][:, len_image_full+len_newline_full:]
-
+				aux_loss = layer_outputs[-1]
+				aux_loss_total += aux_loss/self.config.num_of_vision_mlp_layers
 				if layer_i == len(self.layers) - 1:
 					hidden_states = torch.cat([hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1)
 
@@ -249,7 +250,6 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 			all_hidden_states += (hidden_states,)
 
 		next_cache = None
-		aux_loss_total = 0
 		if not return_dict:
 			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
 		return BaseModelOutputWithPastWithAuxLoss(
@@ -595,11 +595,14 @@ def decoder_forward(
 		hidden_states = self.post_attention_layernorm(hidden_states)
 		if fast_vision:
 			hidden_states_image_full = hidden_states[:, :len_image_full]
-			hidden_states = hidden_states[:, len_image_full:]
+			# hidden_states = hidden_states[:, len_image_full:]
 			hidden_states_image_full = self.vision_mlp_layers.ffn(hidden_states_image_full)
 		hidden_states = self.mlp(hidden_states)
 		if fast_vision:
+			hidden_states_image_full_aux = hidden_states[:, :len_image_full]
+			hidden_states = hidden_states[:, len_image_full:]
 			hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
+			aux_loss = F.smooth_l1_loss(hidden_states_image_full, hidden_states_image_full_aux.detach())
 		hidden_states = residual + hidden_states
 
 		outputs = (hidden_states,)
@@ -611,7 +614,7 @@ def decoder_forward(
 			outputs += (present_key_value,)
 
 		if fast_vision:
-			outputs += (hidden_states_image_full, )
+			outputs += (aux_loss,)
 
 		return outputs
 
