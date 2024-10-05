@@ -197,7 +197,7 @@ class VisionMLP_ffn(nn.Module):
 	def forward(self, image_full, compress_reduce_factor=4, per_crop_token_len=576, attention_mask=None):
 		# image_full = self.proj(image_full).to(image_full.dtype)
 		# return image_full
-		return self.down_proj(self.act_fn(self.gate_proj(image_full)) * self.up_proj(image_full))
+		return self.up_proj(self.act_fn(self.gate_proj(image_full)) * self.down_proj(image_full))
 	
 class VisionMLP(nn.Module):
 	def __init__(self, config, intermediate_size=1024, bias=False):
