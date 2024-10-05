@@ -603,10 +603,11 @@ def decoder_forward(
 			hidden_states_image_full = self.vision_mlp_layers.ffn(hidden_states_image_full)
 		hidden_states = self.mlp(hidden_states)
 		if fast_vision:
-			hidden_states_image_full_aux = hidden_states[:, :len_image_full]
+			# hidden_states_image_full_aux = hidden_states[:, :len_image_full]
 			hidden_states = hidden_states[:, len_image_full:]
 			hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
-			aux_loss = F.smooth_l1_loss(hidden_states_image_full, hidden_states_image_full_aux.detach())
+			# aux_loss = F.smooth_l1_loss(hidden_states_image_full, hidden_states_image_full_aux.detach())
+			aux_loss = 0
 		hidden_states = residual + hidden_states
 
 		outputs = (hidden_states,)
