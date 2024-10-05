@@ -182,7 +182,7 @@ class VisionMLP_sa(nn.Module):
 		# 	nn.Sigmoid(),
 		# )
 
-	def forward(self, image_full, image_compress, compress_reduce_factor, per_crop_token_len=576, attention_mask=None):
+	def forward(self, image_full, image_compress=None, compress_reduce_factor=None, per_crop_token_len=576, attention_mask=None):
 		image_full = self.proj1(image_full)
 		# gate_weight = self.gate(image_full)
 		image_full = self.proj2(image_full)
