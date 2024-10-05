@@ -281,7 +281,7 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
 		# 	'shard_metadata': trainer.model.get_shard_metadata()
 		# }
 		# ckpt_path = f'{ckpt_prefix}_rank-{rank:08d}-of-{world_size:08d}.pth'
-		ckpt_path = 'mm_projector.bin'
+		ckpt_path = f'{ckpt_prefix}.bin'
 		ckpt = weight_to_save
 		os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
 		if xm.is_master_ordinal(local=False):
