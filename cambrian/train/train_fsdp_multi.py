@@ -1299,7 +1299,7 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 	
 	return image_info
 
-def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.bfloat16):
+def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.float32):
 	min_dtype = torch.finfo(dtype).min
 	bs = position_ids_q.shape[0]
 	position_ids_q = position_ids_q.view(bs, -1, 1)
@@ -1504,12 +1504,12 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 	attention_mask_compress_4d[:, :, len_image_compress:, :len_image_compress] = min_dtype
 
 
-	ee_attention_mask = attention_mask_regular_4d.clone()
-	min_dtype = torch.finfo(torch.bfloat16).min
-	diag_masks = torch.full((len_image_full, len_image_full), min_dtype, dtype=ee_attention_mask.dtype, device=ee_attention_mask.device)
-	diag_masks.fill_diagonal_(0) 
-	ee_attention_mask[:, :, :len_image_full, :len_image_full] = diag_masks
-	attention_mask_compress_4d = ee_attention_mask
+	# ee_attention_mask = attention_mask_regular_4d.clone()
+	# min_dtype = torch.finfo(torch.bfloat16).min
+	# diag_masks = torch.full((len_image_full, len_image_full), min_dtype, dtype=ee_attention_mask.dtype, device=ee_attention_mask.device)
+	# diag_masks.fill_diagonal_(0) 
+	# ee_attention_mask[:, :, :len_image_full, :len_image_full] = diag_masks
+	# attention_mask_compress_4d = ee_attention_mask
 	return input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, attention_mask_regular_4d, attention_mask_compress_4d
 
 
