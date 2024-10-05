@@ -641,7 +641,7 @@ def decoder_forward(
 			residual = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
 			hidden_states = self.input_layernorm(hidden_states)
 			kv_states = hidden_states
-			hidden_states_image_full = hidden_states[:, :len_image_full]
+			hidden_states_image_full = hidden_states[:, len_image_compress:len_image_compress+len_image_full]
 			hidden_states_image_full_residual = hidden_states_image_full
 			hidden_states = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
 		else:
