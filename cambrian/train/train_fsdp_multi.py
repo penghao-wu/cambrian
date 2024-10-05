@@ -1297,7 +1297,7 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 	
 	return image_info
 
-def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.float32):
+def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.bfloat16):
 	min_dtype = torch.finfo(dtype).min
 	bs = position_ids_q.shape[0]
 	position_ids_q = position_ids_q.view(bs, -1, 1)
@@ -1992,8 +1992,8 @@ def train(INDEX, attn_implementation=None):
 	trainer = CambrianTrainer(model=model,
 					tokenizer=tokenizer,
 					args=training_args,
-					extra_losses=["lm_loss", "aux_loss"],
-					# extra_losses=["lm_loss"],
+					# extra_losses=["lm_loss", "aux_loss"],
+					extra_losses=["lm_loss"],
 					**data_module)
 	trainer.is_fsdp_enabled = True
 	if training_args.train_continue:
