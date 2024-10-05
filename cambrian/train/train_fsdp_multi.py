@@ -1297,7 +1297,7 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 	
 	return image_info
 
-def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.bfloat16):
+def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.float32):
 	min_dtype = torch.finfo(dtype).min
 	bs = position_ids_q.shape[0]
 	position_ids_q = position_ids_q.view(bs, -1, 1)
@@ -1502,12 +1502,12 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 	attention_mask_compress_4d[:, :, len_image_compress:, :len_image_compress] = min_dtype
 
 
-	# ee_attention_mask = attention_mask_regular_4d.clone()
-	# min_dtype = torch.finfo(torch.bfloat16).min
-	# diag_masks = torch.full((len_image_full, len_image_full), min_dtype, dtype=ee_attention_mask.dtype, device=ee_attention_mask.device)
-	# diag_masks.fill_diagonal_(0) 
-	# ee_attention_mask[:, :, :len_image_full, :len_image_full] = diag_masks
-	# attention_mask_compress_4d = ee_attention_mask
+	ee_attention_mask = attention_mask_regular_4d.clone()
+	min_dtype = torch.finfo(torch.bfloat16).min
+	diag_masks = torch.full((len_image_full, len_image_full), min_dtype, dtype=ee_attention_mask.dtype, device=ee_attention_mask.device)
+	diag_masks.fill_diagonal_(0) 
+	ee_attention_mask[:, :, :len_image_full, :len_image_full] = diag_masks
+	attention_mask_compress_4d = ee_attention_mask
 	return input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, attention_mask_regular_4d, attention_mask_compress_4d
 
 
@@ -1924,8 +1924,8 @@ def train(INDEX, attn_implementation=None):
 			model.requires_grad_(False)
 			# for p in model.get_model().mm_projector.parameters():
 			#     p.requires_grad = True
-			tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline', 'vision_mlp_layers']
-			# tune_modules = ['vision_mlp_layers']
+			# tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline', 'vision_mlp_layers']
+			tune_modules = ['vision_mlp_layers']
 			for name, param in model.named_parameters():
 				if any(listed_name in name for listed_name in tune_modules):
 					print_rank0('tuning {}'.format(name))
@@ -1992,8 +1992,8 @@ def train(INDEX, attn_implementation=None):
 	trainer = CambrianTrainer(model=model,
 					tokenizer=tokenizer,
 					args=training_args,
-					# extra_losses=["lm_loss", "aux_loss"],
-					extra_losses=["lm_loss"],
+					extra_losses=["lm_loss", "aux_loss"],
+					# extra_losses=["lm_loss"],
 					**data_module)
 	trainer.is_fsdp_enabled = True
 	if training_args.train_continue:
