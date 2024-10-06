@@ -5,14 +5,18 @@ from torch import nn
 from transformers.models.llama.modeling_llama import LlamaRMSNorm
 
 @torch.no_grad()
-def svd_init(decoder_layer, bias=False):
+def svd_init(decoder_layer, mlp_layer=None, bias=False):
 	# Extract the original layers
 	v_proj = decoder_layer.self_attn.v_proj
 	o_proj = decoder_layer.self_attn.o_proj
 
 	# Extract the new layers
-	new_layer1 = decoder_layer.vision_mlp_layers.sa.proj1
-	new_layer2 = decoder_layer.vision_mlp_layers.sa.proj2
+	if mlp_layer is not None:
+		new_layer1 = mlp_layer.proj1
+		new_layer2 = mlp_layer.proj2
+	else:
+		new_layer1 = decoder_layer.vision_mlp_layers.sa.proj1
+		new_layer2 = decoder_layer.vision_mlp_layers.sa.proj2
 
 	dim2 = new_layer1.out_features
 
@@ -68,8 +72,10 @@ def svd_init(decoder_layer, bias=False):
 
 
 class VisionMLP(nn.Module):
-	def __init__(self, config, intermediate_size):
+	def __init__(self, config, intermediate_size, bias=False):
 		super().__init__()
+		self.proj1 = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		self.proj2 = nn.Linear(intermediate_size, config.hidden_size, bias=bias)
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		# self.gate = nn.Sequential(nn.Linear(intermediate_size, intermediate_size, bias=False), nn.Sigmoid())
@@ -81,6 +87,7 @@ class VisionMLP(nn.Module):
 		self.layernorm_post = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
 	def forward(self, image_full, image_compress, compress_reduce_factor, per_crop_token_len=576, attention_mask=None):
+		image_full = self.proj2(self.proj1(image_full))
 		side_len_full = int(per_crop_token_len**0.5)
 		side_len_compress = side_len_full // compress_reduce_factor
 

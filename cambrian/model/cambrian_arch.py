@@ -199,8 +199,10 @@ class CambrianMetaModel:
 					self.config.num_of_vision_mlp_layers = num_of_vision_mlp_layers
 					hidden_size_reduce_factor = 4 if self.config.hidden_size >= 1024 else 2
 					self.vision_mlp_layers = nn.ModuleList(
-						[VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor) for layer_idx in range(0, num_of_vision_mlp_layers)]
+						[VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor, bias=True) for layer_idx in range(0, num_of_vision_mlp_layers)]
 						)
+					for i in range(num_of_vision_mlp_layers):
+						svd_init(self.layers[compress_v_start_layer+i], self.vision_mlp_layers[i], bias=True)
 					
 					# for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers):
 					# 	self.layers[layer_idx].vision_mlp_layers = VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor, bias=True)
