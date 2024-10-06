@@ -229,6 +229,7 @@ class VisionMLP_sa(nn.Module):
 		# )
 
 	def forward(self, image_full, image_compress=None, compress_reduce_factor=None, per_crop_token_len=576, attention_mask=None):
+		image_full = image_full.transpose(1, 2).contiguous().flatten(2,3)
 		image_full = self.proj1(image_full)
 		image_full = self.proj2(image_full)
 		return image_full

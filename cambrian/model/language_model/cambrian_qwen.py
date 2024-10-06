@@ -543,7 +543,6 @@ def Qwen2SdpaAttention_forward(
 		value_states_image_full = value_states[:, :, :image_full_len]
 		value_states_image_compress = value_states[:, :, image_full_len:image_compress_len+image_full_len]
 		value_states_image_full = vision_mlp.sa(value_states_image_full, value_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
-		value_states_image_full = value_states_image_full.transpose(1, 2).contiguous().reshape(bsz, image_full_len, self.hidden_size)
 		
 
 	attn_output = self.o_proj(attn_output)
