@@ -267,8 +267,9 @@ class VisionMLP_ffn(nn.Module):
 class VisionMLP(nn.Module):
 	def __init__(self, config, intermediate_size=1024, bias=False):
 		super().__init__()
-		self.sa = VisionMLP_sa(config, intermediate_size, bias)
-		self.ffn = VisionMLP_ffn(config, intermediate_size)
+		# self.sa = VisionMLP_sa(config, intermediate_size, bias)
+		self.sa = nn.Identity()
+		# self.ffn = VisionMLP_ffn(config, intermediate_size)
 
 
 # 	def forward(self, image_full, image_compress, compress_reduce_factor, per_crop_token_len=576, attention_mask=None):

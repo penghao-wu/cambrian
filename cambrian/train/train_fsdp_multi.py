@@ -1299,7 +1299,7 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 	
 	return image_info
 
-def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.bfloat16):
+def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_mask_kv, dtype=torch.float32):
 	min_dtype = torch.finfo(dtype).min
 	bs = position_ids_q.shape[0]
 	position_ids_q = position_ids_q.view(bs, -1, 1)
@@ -1487,21 +1487,23 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 	attention_mask = torch.cat([attention_mask_image_full, attention_mask_newline_full, attention_mask_text], 1)
 	position_ids = torch.cat([position_ids_image_full, position_ids_newline_full, position_ids_text], 1)
 
+	dtype = torch.bfloat16
+
 	# prepare the 4D attention masks for regular attention and compressv attention
 
 	# regular attention: Q=[image_full, newline_full, text], KV=[image_full, newline_full, text]
-	attention_mask_regular_4d = calculate_causal_attention_mask(position_ids, position_ids, attention_mask)
+	attention_mask_regular_4d = calculate_causal_attention_mask(position_ids, position_ids, attention_mask, dtype)
 
-	# compressv attention: Q=[image_compress, newline_full, text], KV=[image_compress, image_full, newline_full, text]
-	attention_mask_compress_4d = calculate_causal_attention_mask(torch.cat([position_ids_image_compress, position_ids_newline_full, position_ids_text], 1), torch.cat([position_ids_image_compress, position_ids_image_full, position_ids_newline_full, position_ids_text], 1), torch.cat([attention_mask_image_compress, attention_mask_image_full, attention_mask_newline_full, attention_mask_text], 1))
+	# compressv attention: Q=[image_compress, newline_full, text], KV=[image_full, image_compress, newline_full, text]
+	attention_mask_compress_4d = calculate_causal_attention_mask(torch.cat([position_ids_image_compress, position_ids_newline_full, position_ids_text], 1), torch.cat([position_ids_image_full, position_ids_image_compress, position_ids_newline_full, position_ids_text], 1), torch.cat([attention_mask_image_full, attention_mask_image_compress, attention_mask_newline_full, attention_mask_text], 1), dtype)
 
-	min_dtype = torch.finfo(torch.bfloat16).min
+	min_dtype = torch.finfo(dtype).min
 	len_image_full = max_num_image_crops*per_crop_token_len
 	len_image_compress = max_num_image_crops*(per_crop_token_len//compress_reduce_factor**2)
 	# compress can't see full
-	attention_mask_compress_4d[:, :, :len_image_compress, len_image_compress:len_image_compress+len_image_full] = min_dtype
+	attention_mask_compress_4d[:, :, :len_image_compress, :len_image_full] = min_dtype
 	# others can't see compress
-	attention_mask_compress_4d[:, :, len_image_compress:, :len_image_compress] = min_dtype
+	attention_mask_compress_4d[:, :, len_image_compress:, len_image_full:len_image_full+len_image_compress] = min_dtype
 
 
 	# ee_attention_mask = attention_mask_regular_4d.clone()
