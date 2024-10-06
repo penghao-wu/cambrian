@@ -218,10 +218,14 @@ class VisionMLP_sa(nn.Module):
 		self.proj1 = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.proj2 = nn.Linear(intermediate_size, config.hidden_size, bias=False)
 
-		# self.gate = nn.Sequential(
-		# 	nn.Linear(intermediate_size, config.hidden_size, bias=False),
-		# 	nn.Sigmoid(),
-		# )
+		self.hidden_size = config.hidden_size
+		self.num_heads = config.num_attention_heads
+		self.head_dim = self.hidden_size // self.num_heads
+
+		self.gate = nn.Sequential(
+			nn.Linear(self.head_dim, 1, bias=False),
+			nn.Sigmoid(),
+		)
 
 		# self.gate = nn.Sequential(
 		# 	nn.Linear(config.hidden_size, config.hidden_size, bias=False),
@@ -229,6 +233,8 @@ class VisionMLP_sa(nn.Module):
 		# )
 
 	def forward(self, image_full, image_compress=None, compress_reduce_factor=None, per_crop_token_len=576, attention_mask=None):
+		gate_weight = self.gate(image_full)
+		image_full = gate_weight * image_full + (1-gate_weight) * image_compress
 		image_full = image_full.transpose(1, 2).contiguous().flatten(2,3)
 		image_full = self.proj1(image_full)
 		image_full = self.proj2(image_full)
