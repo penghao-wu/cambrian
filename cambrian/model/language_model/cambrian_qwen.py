@@ -132,16 +132,16 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		compress_v = self.config.compress_v
 		compress_v_start_layer = self.config.compress_v_start_layer
 
-		len_image_full = max_num_image_crops * per_crop_token_len
-		len_newline_full = max_num_image_crops
-		len_image_compress = max_num_image_crops * per_crop_token_len // compress_reduce_factor**2
-		len_text = inputs_embeds.shape[1] - len_image_full - len_newline_full
+		image_full_len = max_num_image_crops * per_crop_token_len
+		newline_full_len = max_num_image_crops
+		image_compress_len = max_num_image_crops * per_crop_token_len // compress_reduce_factor**2
+		text_len = inputs_embeds.shape[1] - image_full_len - newline_full_len
 
 		hidden_states = inputs_embeds
 
-		hidden_states_image_full = hidden_states[:, :len_image_full]
-		hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
-		hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
+		hidden_states_image_full = hidden_states[:, :image_full_len]
+		hidden_states_newline_full = hidden_states[:, image_full_len:image_full_len+newline_full_len]
+		hidden_states_text = hidden_states[:, image_full_len+newline_full_len:]
 
 		aux_loss_total = 0
 		for layer_i, decoder_layer in enumerate(self.layers):
@@ -161,8 +161,8 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						output_attentions,
 						use_cache,
 						False,
-						len_image_compress,
-						len_image_full
+						image_compress_len,
+						image_full_len
 					)
 				else:
 					layer_outputs = decoder_layer(
@@ -174,21 +174,21 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						output_attentions,
 						use_cache,
 						False,
-						len_image_compress,
-						len_image_full
+						image_compress_len,
+						image_full_len
 					)
 				
 				hidden_states = layer_outputs[0]
 							
 			else:
 				if layer_i == compress_v_start_layer:
-					hidden_states_image_full = hidden_states[:, :len_image_full]
-					hidden_states_newline_full = hidden_states[:, len_image_full:len_image_full+len_newline_full]
-					hidden_states_text = hidden_states[:, len_image_full+len_newline_full:]
+					hidden_states_image_full = hidden_states[:, :image_full_len]
+					hidden_states_newline_full = hidden_states[:, image_full_len:image_full_len+newline_full_len]
+					hidden_states_text = hidden_states[:, image_full_len+newline_full_len:]
 
-					position_ids_image_full = position_ids[:, :len_image_full]
-					position_ids_newline_full = position_ids[:, len_image_full:len_image_full+len_newline_full]
-					position_ids_text = position_ids[:, len_image_full+len_newline_full:]
+					position_ids_image_full = position_ids[:, :image_full_len]
+					position_ids_newline_full = position_ids[:, image_full_len:image_full_len+newline_full_len]
+					position_ids_text = position_ids[:, image_full_len+newline_full_len:]
 
 					hidden_states_image_compress = get_image_compress(hidden_states_image_full, compress_reduce_factor, per_crop_token_len)
 
@@ -198,7 +198,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 					# position_ids_compress_q = torch.cat([position_ids_newline_full, position_ids_text], 1)
 					# # position_ids_compress_q = torch.cat([position_ids_image_full, position_ids_newline_full, position_ids_text], 1)
 					# position_ids_compress_kv = torch.cat([position_ids_image_full,  position_ids_newline_full, position_ids_text], 1)
-					attention_mask_compress_4d = attention_mask_regular_4d[:, :, len_image_full:]
+					attention_mask_compress_4d = attention_mask_regular_4d[:, :, image_full_len:]
 
 				if self.gradient_checkpointing and self.training:
 					layer_outputs = self._gradient_checkpointing_func(
@@ -212,8 +212,8 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						output_attentions,
 						use_cache,
 						True,
-						len_image_compress,
-						len_image_full
+						image_compress_len,
+						image_full_len
 					)
 				else:
 					layer_outputs = decoder_layer(
@@ -226,15 +226,15 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						output_attentions,
 						use_cache,
 						True,
-						len_image_compress,
-						len_image_full
+						image_compress_len,
+						image_full_len
 					)
 
 				# hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
 
-				hidden_states_image_full = layer_outputs[0][:, :len_image_full]
-				hidden_states_newline_full = layer_outputs[0][:, len_image_full:len_image_full+len_newline_full]
-				hidden_states_text = layer_outputs[0][:, len_image_full+len_newline_full:]
+				hidden_states_image_full = layer_outputs[0][:, :image_full_len]
+				hidden_states_newline_full = layer_outputs[0][:, image_full_len:image_full_len+newline_full_len]
+				hidden_states_text = layer_outputs[0][:, image_full_len+newline_full_len:]
 				aux_loss = 0
 				aux_loss_total += aux_loss/self.config.num_of_vision_mlp_layers
 				if layer_i == len(self.layers) - 1:
@@ -490,8 +490,8 @@ def Qwen2SdpaAttention_forward(
 	output_attentions = False,
 	use_cache= False,
 	sep_sa = False,
-	len_image_compress=36,
-	len_image_full=576,
+	image_compress_len=36,
+	image_full_len=576,
 	vision_mlp=None,
 ):
 
@@ -540,13 +540,16 @@ def Qwen2SdpaAttention_forward(
 	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
 
 	if sep_sa:
-		value_states_image_full = value_states[:, :, :len_image_full]
-		value_states_image_compress = value_states[:, :, len_image_full:len_image_compress+len_image_full]
-		# value_states_image_full = vision_mlp.sa(value_states_image_full, value_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
-		value_states_image_full = value_states_image_full.transpose(1, 2).contiguous().reshape(bsz, len_image_full, self.hidden_size)
-		attn_output = torch.cat([value_states_image_full, attn_output], 1)
+		value_states_image_full = value_states[:, :, :image_full_len]
+		value_states_image_compress = value_states[:, :, image_full_len:image_compress_len+image_full_len]
+		value_states_image_full = vision_mlp.sa(value_states_image_full, value_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
+		value_states_image_full = value_states_image_full.transpose(1, 2).contiguous().reshape(bsz, image_full_len, self.hidden_size)
+		
 
 	attn_output = self.o_proj(attn_output)
+
+	if sep_sa:
+		attn_output = torch.cat([value_states_image_full, attn_output], 1)
 
 	return attn_output, None, past_key_value
 
@@ -563,18 +566,18 @@ Qwen2SdpaAttention.forward = Qwen2SdpaAttention_forward
 # 	output_attentions = False,
 # 	use_cache = False,
 # 	fast_vision=False,
-# 	len_image_compress=36,
-# 	len_image_full=576,
+# 	image_compress_len=36,
+# 	image_full_len=576,
 # 	**kwargs,):
 # 		if fast_vision:
-# 			# hidden_states_image_full_residual = hidden_states[:, :len_image_full]
-# 			residual = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
-# 			# residual = hidden_states[:, len_image_full:]
+# 			# hidden_states_image_full_residual = hidden_states[:, :image_full_len]
+# 			residual = torch.cat([hidden_states[:, :image_compress_len], hidden_states[:, image_compress_len+image_full_len:]], 1)
+# 			# residual = hidden_states[:, image_full_len:]
 # 			hidden_states = self.input_layernorm(hidden_states)
 # 			kv_states = hidden_states
-# 			hidden_states = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
-# 			# hidden_states_image_full = hidden_states[:, :len_image_full]
-# 			# hidden_states = hidden_states[:, len_image_full:]
+# 			hidden_states = torch.cat([hidden_states[:, :image_compress_len], hidden_states[:, image_compress_len+image_full_len:]], 1)
+# 			# hidden_states_image_full = hidden_states[:, :image_full_len]
+# 			# hidden_states = hidden_states[:, image_full_len:]
 # 			# residual = hidden_states
 # 			# hidden_states = self.input_layernorm(hidden_states)
 # 			# kv_states = hidden_states
@@ -607,13 +610,13 @@ Qwen2SdpaAttention.forward = Qwen2SdpaAttention_forward
 # 		residual = hidden_states
 # 		hidden_states = self.post_attention_layernorm(hidden_states)
 # 		# if fast_vision:
-# 		# 	hidden_states_image_full = hidden_states[:, :len_image_full]
-# 		# 	hidden_states = hidden_states[:, len_image_full:]
+# 		# 	hidden_states_image_full = hidden_states[:, :image_full_len]
+# 		# 	hidden_states = hidden_states[:, image_full_len:]
 # 		# 	hidden_states_image_full = self.vision_mlp_layers.ffn(hidden_states_image_full)
 # 		hidden_states = self.mlp(hidden_states)
 # 		# if fast_vision:
-# 		# 	# hidden_states_image_full_aux = hidden_states[:, :len_image_full]
-# 		# 	# hidden_states = hidden_states[:, len_image_full:]
+# 		# 	# hidden_states_image_full_aux = hidden_states[:, :image_full_len]
+# 		# 	# hidden_states = hidden_states[:, image_full_len:]
 # 		# 	hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
 # 		# 	# aux_loss = F.smooth_l1_loss(hidden_states_image_full, hidden_states_image_full_aux.detach())
 # 		# 	aux_loss = 0
@@ -644,14 +647,14 @@ def decoder_forward(
 	output_attentions = False,
 	use_cache = False,
 	sep_sa_ffn = False,
-	len_image_compress=36,
-	len_image_full=576,
+	image_compress_len=36,
+	image_full_len=576,
 	**kwargs,):
 		if sep_sa_ffn:
 			residual = hidden_states
 			hidden_states = self.input_layernorm(hidden_states)
 			kv_states = hidden_states
-			hidden_states = hidden_states[:, len_image_full:]
+			hidden_states = hidden_states[:, image_full_len:]
 		else:
 			residual = hidden_states
 			hidden_states = self.input_layernorm(hidden_states)
@@ -668,8 +671,8 @@ def decoder_forward(
 			output_attentions=output_attentions,
 			use_cache=use_cache,
 			sep_sa = sep_sa_ffn,
-			len_image_compress=len_image_compress,
-			len_image_full=len_image_full,
+			image_compress_len=image_compress_len,
+			image_full_len=image_full_len,
 			vision_mlp=self.vision_mlp_layers if sep_sa_ffn else None,
 			**kwargs,
 		)
