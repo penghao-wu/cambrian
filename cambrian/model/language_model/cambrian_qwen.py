@@ -644,7 +644,6 @@ def decoder_forward(
 	output_attentions = False,
 	use_cache = False,
 	sep_sa_ffn = False,
-	compress_v=False,
 	len_image_compress=36,
 	len_image_full=576,
 	**kwargs,):
@@ -659,7 +658,7 @@ def decoder_forward(
 			kv_states = hidden_states
 
 		# Cross Attention
-		hidden_states, self_attn_weights, present_key_value, v_values = self.self_attn(
+		hidden_states, self_attn_weights, present_key_value = self.self_attn(
 			hidden_states=hidden_states,
 			kv_states = kv_states,
 			attention_mask=attention_mask,
