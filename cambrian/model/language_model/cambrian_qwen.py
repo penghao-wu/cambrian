@@ -542,7 +542,7 @@ def Qwen2SdpaAttention_forward(
 	if sep_sa:
 		value_states_image_full = value_states[:, :, :len_image_full]
 		value_states_image_compress = value_states[:, :, len_image_full:len_image_compress+len_image_full]
-		value_states_image_full = vision_mlp.sa(value_states_image_full, value_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
+		# value_states_image_full = vision_mlp.sa(value_states_image_full, value_states_image_compress, int((len_image_full//len_image_compress)**0.5), len_image_full)
 		value_states_image_full = value_states_image_full.transpose(1, 2).contiguous().reshape(bsz, len_image_full, self.hidden_size)
 		attn_output = torch.cat([value_states_image_full, attn_output], 1)
 
