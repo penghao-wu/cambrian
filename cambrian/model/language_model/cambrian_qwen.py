@@ -562,9 +562,11 @@ def decoder_forward(
 	**kwargs,):
 		if fast_vision:
 			# hidden_states_image_full_residual = hidden_states[:, :len_image_full]
-			residual = hidden_states[:, len_image_full:]
+			residual = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
+			# residual = hidden_states[:, len_image_full:]
 			hidden_states = self.input_layernorm(hidden_states)
 			kv_states = hidden_states
+			hidden_states = torch.cat([hidden_states[:, :len_image_compress], hidden_states[:, len_image_compress+len_image_full:]], 1)
 			# hidden_states_image_full = hidden_states[:, :len_image_full]
 			# hidden_states = hidden_states[:, len_image_full:]
 			# residual = hidden_states
