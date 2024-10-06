@@ -26,7 +26,7 @@ def svd_init(decoder_layer, mlp_layer=None):
 	U = U.to(W_o.dtype)
 	S = S.to(W_o.dtype)
 	Vh = Vh.to(W_o.dtype)
-	U_prime = U[:, :new_dim]
+	U_prime = U[:, :hidden_dim]
 	S_prime = S[:hidden_dim]
 	Vh_prime = Vh[:hidden_dim, :]
 
