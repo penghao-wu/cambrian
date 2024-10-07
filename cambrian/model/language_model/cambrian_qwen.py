@@ -236,6 +236,8 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				hidden_states_newline_full = layer_outputs[0][:, image_full_len+image_compress_len:image_full_len+image_compress_len+newline_full_len]
 				hidden_states_text = layer_outputs[0][:, image_full_len+image_compress_len+newline_full_len:]
 
+				hidden_states_image_compress = get_image_compress(hidden_states_image_full, compress_reduce_factor, per_crop_token_len)
+
 				# hidden_states_image_full = layer_outputs[0][:, :image_full_len]
 				# hidden_states_newline_full = layer_outputs[0][:, image_full_len:image_full_len+newline_full_len]
 				# hidden_states_text = layer_outputs[0][:, image_full_len+newline_full_len:]
