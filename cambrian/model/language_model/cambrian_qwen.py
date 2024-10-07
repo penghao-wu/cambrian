@@ -540,14 +540,13 @@ def Qwen2SdpaAttention_forward(
 		is_causal=self.is_causal and attention_mask is None and q_len > 1,
 	)
 
-	attn_output = attn_output.transpose(1, 2).contiguous()
-	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
-
 	if sep_sa:
 		value_states_image_full = value_states[:, :, :image_full_len]
-		value_states_image_compress = value_states[:, :, image_full_len:image_compress_len+image_full_len]
+		value_states_image_compress = attn_output[:, :, image_full_len:image_compress_len+image_full_len]
 		value_states_image_full = vision_mlp.sa(value_states_image_full, value_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
-		
+
+	attn_output = attn_output.transpose(1, 2).contiguous()
+	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)		
 
 	attn_output = self.o_proj(attn_output)
 
