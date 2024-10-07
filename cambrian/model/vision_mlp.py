@@ -233,6 +233,14 @@ class VisionMLP_sa(nn.Module):
 		# )
 
 	def forward(self, image_full, image_compress=None, compress_reduce_factor=None, per_crop_token_len=576, attention_mask=None):
+		side_len_full = int(per_crop_token_len**0.5)
+		side_len_compress = side_len_full // compress_reduce_factor
+
+		num_image_crops = image_full.shape[2]//per_crop_token_len
+		bs = image_full.shape[0]
+
+		image_compress = image_compress.view(bs*self.num_heads*num_image_crops, side_len_compress, side_len_compress, -1)
+		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2).view(bs, self.num_heads, num_image_crops*side_len_full*side_len_full, -1)
 		gate_weight = self.gate(image_full)
 		image_full = gate_weight * image_full + (1-gate_weight) * image_compress
 		image_full = image_full.transpose(1, 2).contiguous().flatten(2,3)
