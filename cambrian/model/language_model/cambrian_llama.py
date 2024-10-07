@@ -475,7 +475,7 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids_q, position_ids_k, unsquee
 	k_embed = (k * cos_k) + (rotate_half(k) * sin_k)
 	return q_embed, k_embed
 
-def Qwen2SdpaAttention_forward(
+def LlamaSdpaAttention_forward(
 	self,
 	hidden_states,
 	kv_states,
