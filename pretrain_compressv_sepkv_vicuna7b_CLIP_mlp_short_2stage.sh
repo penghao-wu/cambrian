@@ -10,7 +10,7 @@ export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_sepsa_oproj_2scalesagate_layer11_s
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
 python cambrian/train/train_tpu.py \
-    --model_name_or_path "Qwen/Qwen2-0.5B-Instruct" \
+    --model_name_or_path "lmsys/vicuna-7b-v1.5" \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/pretrain.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
