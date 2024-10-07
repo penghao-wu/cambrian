@@ -1501,7 +1501,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 	len_image_full = max_num_image_crops*per_crop_token_len
 	len_image_compress = max_num_image_crops*(per_crop_token_len//compress_reduce_factor**2)
 	# compress can't see full
-	attention_mask_compress_4d[:, :, :len_image_compress, :len_image_full] = min_dtype
+	attention_mask_compress_4d[:, :, :len_image_compress, :len_image_full] = 0
 	# others can't see compress
 	attention_mask_compress_4d[:, :, len_image_compress:, len_image_full:len_image_full+len_image_compress] = min_dtype
 
