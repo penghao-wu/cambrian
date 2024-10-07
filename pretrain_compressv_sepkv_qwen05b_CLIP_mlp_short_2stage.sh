@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_qwen05b_CLIP_mlp_sepsa_oproj448_2scalesagate_layer12_shareGPT4V_square_pretrain_stage2joint" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_sepsa_oproj448_2scalesagate_layer10_shareGPT4V_square_pretrain_stage2joint" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -21,7 +21,7 @@ python cambrian/train/train_tpu.py \
     --per_crop_token_len 576 \
     --compress_reduce_factor 4 \
     --compress_v True \
-    --compress_v_start_layer 12 \
+    --compress_v_start_layer 10 \
     --mm_vision_mlp_lr 1e-4 \
     --num_query_group 1 \
     --query_num_list '[576]' \
