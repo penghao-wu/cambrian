@@ -255,7 +255,7 @@ class VisionMLP_sa(nn.Module):
 
 		gate_weight = self.gate(image_full)
 		# image_full = gate_weight * image_full + (1-gate_weight) * image_compress
-		image_full = gate_weight[:, :, :1] * image_full + gate_weight[:, :, 1:2] * image_compress + gate_weight[:, :, 2:] * image_full_pool
+		image_full = gate_weight[:, :, :, :1] * image_full + gate_weight[:, :, :, 1:2] * image_compress + gate_weight[:, :, :, 2:] * image_full_pool
 		image_full = image_full.transpose(1, 2).contiguous().flatten(2,3)
 		image_full = self.proj1(image_full)
 		image_full = self.proj2(image_full)
