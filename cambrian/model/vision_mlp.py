@@ -222,10 +222,17 @@ class VisionMLP_sa(nn.Module):
 		self.num_heads = config.num_attention_heads
 		self.head_dim = self.hidden_size // self.num_heads
 
+
+		self.pool = nn.AvgPool2d(kernel_size=config.compress_reduce_factor, stride=config.compress_reduce_factor)
 		self.gate = nn.Sequential(
-			nn.Linear(self.head_dim, 1, bias=False),
-			nn.Sigmoid(),
+			nn.Linear(self.head_dim, 3, bias=False),
+			nn.Softmax(-1)
 		)
+
+		# self.gate = nn.Sequential(
+		# 	nn.Linear(self.head_dim, 1, bias=False),
+		# 	nn.Sigmoid(),
+		# )
 
 		# self.gate = nn.Sequential(
 		# 	nn.Linear(config.hidden_size, config.hidden_size, bias=False),
@@ -241,8 +248,14 @@ class VisionMLP_sa(nn.Module):
 
 		image_compress = image_compress.view(bs*self.num_heads*num_image_crops, side_len_compress, side_len_compress, -1)
 		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2).view(bs, self.num_heads, num_image_crops*side_len_full*side_len_full, -1)
+
+		image_full = image_full.view(bs*self.num_heads*num_image_crops, side_len_full, side_len_full, -1)
+		image_full_pool = self.pool(image_full.permute(0, 3, 1, 2)).permute(0, 2, 3, 1).view(bs, self.num_heads, num_image_crops*side_len_full*side_len_full, -1)
+		image_full = image_full.view(bs, self.num_heads, num_image_crops*side_len_full*side_len_full, -1)
+
 		gate_weight = self.gate(image_full)
-		image_full = gate_weight * image_full + (1-gate_weight) * image_compress
+		# image_full = gate_weight * image_full + (1-gate_weight) * image_compress
+		image_full = gate_weight[:, :, :1] * image_full + gate_weight[:, :, 1:2] * image_compress + gate_weight[:, :, 2:] * image_full_pool
 		image_full = image_full.transpose(1, 2).contiguous().flatten(2,3)
 		image_full = self.proj1(image_full)
 		image_full = self.proj2(image_full)
