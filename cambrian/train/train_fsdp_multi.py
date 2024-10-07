@@ -1286,6 +1286,7 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 
 		attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
 		position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long)
+		position_ids_image_compress += position_ids_image_full_withnewline.max() + 1
 
 	
 	image_info = {}
