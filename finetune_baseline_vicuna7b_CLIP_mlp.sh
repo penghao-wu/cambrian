@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_baseline_finetune_pad_738k" &&
+export CKPT_NAME="compressv_vicuna7b_CLIP_mlp_baseline_masknoinit_layer11_finetune_pad_738k" &&
 
 # export TPU_PROCESS_BOUNDS=1,1,1 &&
 # export TPU_VISIBLE_CHIPS=0 &&

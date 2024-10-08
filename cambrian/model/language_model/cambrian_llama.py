@@ -150,7 +150,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 					layer_outputs = self._gradient_checkpointing_func(
 						decoder_layer.__call__,
 						hidden_states,
-						attention_mask_regular_4d if layer_i < 100 else attention_mask_compress_4d,
+						attention_mask_regular_4d if layer_i < 11 else attention_mask_compress_4d,
 						position_ids,
 						position_ids,
 						past_key_values,
@@ -163,7 +163,7 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				else:
 					layer_outputs = decoder_layer(
 						hidden_states,
-						attention_mask_regular_4d if layer_i < 100 else attention_mask_compress_4d,
+						attention_mask_regular_4d if layer_i < 11 else attention_mask_compress_4d,
 						position_ids,
 						position_ids,
 						past_key_values,
