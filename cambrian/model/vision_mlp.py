@@ -316,7 +316,7 @@ class VisionMLP_ffn(nn.Module):
 	# 	image_full = gate_weight*image_full + (1-gate_weight)*image_compress
 	# 	return image_full
 
-	def forward(self, image_full, compress_reduce_factor=4, per_crop_token_len=576, attention_mask=None):
+	def forward(self, image_full, image_compress = None, compress_reduce_factor=4, per_crop_token_len=576, attention_mask=None):
 		image_full = self.proj(image_full).to(image_full.dtype)
 
 		return image_full
