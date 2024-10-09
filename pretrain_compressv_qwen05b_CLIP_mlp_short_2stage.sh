@@ -55,11 +55,13 @@ python cambrian/train/train_tpu.py \
     --logging_steps 1 \
     --tf32 False \
     --model_max_length 2048 \
-    --gradient_checkpointing True \
+    --gradient_checkpointing False \
     --dataloader_num_workers 4 \
     --lazy_preprocess True \
     --report_to wandb \
-    --run_name $CKPT_NAME 
+    --run_name $CKPT_NAME \
+    --fsdp "full_shard" \
+    --fsdp_config fsdp_config.json
 
 
 # CKPT_PATH=checkpoints/$CKPT_NAME
