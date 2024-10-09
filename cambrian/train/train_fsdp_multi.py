@@ -1307,7 +1307,7 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, image_
 			attention_mask_image_full_with_newline[:top_offset, :]=0
 		if bottom_offset > 0:
 			attention_mask_image_full_with_newline[-bottom_offset:, :] = 0
-		attention_mask_image_full_with_newline = attention_mask_image_full_with_newline.flatten()
+		attention_mask_image_full_with_newline = attention_mask_image_full_with_newline
 		position_ids_image_full_with_newline = attention_mask_image_full_with_newline.cumsum(0)-1
 
 		attention_mask_image_full = attention_mask_image_full_with_newline[:, :-1].flatten()
