@@ -133,7 +133,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 		compress_v_start_layer = self.config.compress_v_start_layer
 
 		image_full_len = max_num_image_crops * per_crop_token_len
-		newline_full_len = max_num_image_crops
+		newline_full_len = max_num_image_crops * int(per_crop_token_len**0.5)
 		image_compress_len = max_num_image_crops * per_crop_token_len // compress_reduce_factor**2
 		text_len = inputs_embeds.shape[1] - image_full_len - newline_full_len
 
