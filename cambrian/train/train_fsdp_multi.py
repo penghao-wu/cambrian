@@ -1314,7 +1314,7 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, image_
 		position_ids_image_full = position_ids_image_full_with_newline[:, :-1].flatten()
 
 		attention_mask_newline_full = attention_mask_image_full_with_newline[:, -1:].flatten()
-		position_ids_newline_full = position_ids_image_full[:, -1:].flatten()
+		position_ids_newline_full = position_ids_image_full_with_newline[:, -1:].flatten()
 
 		attention_mask_image_compress = torch.ones((height_compress,width_compress), dtype=torch.bool)
 		left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height_compress, width_compress), image_size)
