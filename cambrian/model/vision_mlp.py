@@ -166,8 +166,10 @@ class VisionMLP(nn.Module):
 
 		image_full = image_full.view(bs*num_image_crops, side_len_full, side_len_full, -1)
 		image_compress = image_compress.view(bs*num_image_crops, side_len_compress, side_len_compress, -1).contiguous()
-		assert False, image_compress.shape
-		image_compress = self.context_proj(image_compress)
+		try:
+			image_compress = self.context_proj(image_compress)
+		except:
+			assert False, (image_compress.shape, image_full.shape)
 		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2)
 		residual = image_full
 		image_full = self.input_proj(image_full)
