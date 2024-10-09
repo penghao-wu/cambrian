@@ -1148,6 +1148,7 @@ class LazySupervisedDataset(Dataset):
 		images = []
 		# for a anyres image, we treat each crop as a single image and we need to repeat the <image>, so we record this value here
 		image2crops_nums = []
+		image_size = []
 		if has_image:
 			image_file = dat['image']
 			if type(image_file) is list:
@@ -1160,6 +1161,7 @@ class LazySupervisedDataset(Dataset):
 
 			images = torch.cat([img[0] for img in image])
 			image2crops_nums = [img[2] for img in image]
+			image_size = image[0][1]
 			sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
 
 		elif "video" in sources[0]:
@@ -1259,10 +1261,30 @@ class LazySupervisedDataset(Dataset):
 			# image does not exist in the data, but the model is multimodal
 			processor = self.data_args.image_processor_aux_list[0]
 			data_dict['images'] = torch.zeros(self.data_args.max_num_image_crops, 3, processor.crop_size['height'], processor.crop_size['width'])
+			image_size = (processor.crop_size['width'], processor.crop_size['height'])
 		data_dict['image2crops_nums'] = image2crops_nums
+		data_dict['image_size'] = image_size
 		return data_dict
+	
+def get_padding_offset(cur_size, original_size):
+	cur_w, cur_h = cur_size
+	original_w, original_h = original_size
 
-def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, dummy_num=1, max_length=2048):
+	original_aspect_ratio = original_w / original_h
+	current_aspect_ratio = cur_w / cur_h
+
+	if original_aspect_ratio > current_aspect_ratio:
+		scale_factor = cur_w / original_w
+		new_height = int(np.ceil(original_h * scale_factor))
+		padding = (cur_h - new_height) // 2
+		return 0, 0, padding, padding
+	else:
+		scale_factor = cur_h / original_h
+		new_width = int(np.ceil(original_w * scale_factor))
+		padding = (cur_w - new_width) // 2
+		return padding, padding, 0, 0
+
+def prepare_image_information(per_crop_token_len, compress_reduce_factor, image_size, is_dummy=False, dummy_num=1, max_length=2048):
 	height = width = int(per_crop_token_len**0.5)
 	height_compress = width_compress = height // compress_reduce_factor
 
@@ -1275,18 +1297,35 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 		attention_mask_image_compress = torch.zeros((dummy_num*height_compress*width_compress,), dtype=torch.bool)
 		position_ids_image_compress = torch.full((dummy_num*height_compress*width_compress,), max_length-1, dtype=torch.long)
 	else:
-		attention_mask_image_full_withnewline = torch.ones((height * width+1,), dtype=torch.bool)
-		position_ids_image_full_withnewline = (attention_mask_image_full_withnewline.cumsum(0)-1).to(torch.long)
+		attention_mask_image_full = torch.ones((height, width), dtype=torch.bool)
+		left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height, width), image_size)
+		if left_offset > 0:
+			attention_mask_image_full[:, :left_offset] = 0
+		if right_offset > 0:
+			attention_mask_image_full[:, -right_offset:] = 0
+		if top_offset > 0:
+			attention_mask_image_full[:top_offset, :]=0
+		if bottom_offset > 0:
+			attention_mask_image_full[-bottom_offset:, :] = 0
+		attention_mask_image_full = attention_mask_image_full.flatten()
+		position_ids_image_full = attention_mask_image_full.cumsum(0)-1
 
-		attention_mask_image_full = attention_mask_image_full_withnewline[:-1]
-		attention_mask_newline_full = attention_mask_image_full_withnewline[-1:]
-		position_ids_image_full = position_ids_image_full_withnewline[:-1]
-		position_ids_newline_full = position_ids_image_full_withnewline[-1:]
+		attention_mask_newline_full = torch.ones((1,), dtype=torch.bool)
+		position_ids_newline_full = torch.full((1,), position_ids_image_full.max()+1, dtype=torch.long)
 
-		attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
-		position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long)
+		attention_mask_image_compress = torch.ones((height_compress,width_compress), dtype=torch.bool)
+		left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height_compress, width_compress), image_size)
+		if left_offset > 0:
+			attention_mask_image_compress[:, :left_offset] = 0
+		if right_offset > 0:
+			attention_mask_image_compress[:, -right_offset:] = 0
+		if top_offset > 0:
+			attention_mask_image_compress[:top_offset, :]=0
+		if bottom_offset > 0:
+			attention_mask_image_compress[-bottom_offset:, :] = 0
+		attention_mask_image_compress = attention_mask_image_compress.flatten()
+		position_ids_image_compress = attention_mask_image_compress.cumsum(0)-1
 
-	
 	image_info = {}
 	image_info['attention_mask_image_full'] = attention_mask_image_full
 	image_info['attention_mask_newline_full'] = attention_mask_newline_full
@@ -1314,7 +1353,7 @@ def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_m
 	return causal_mask
 	
 
-def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length=2048, pad_token_id=0):
+def prepare_multimodal_data(input_ids, labels, attention_mask, image_size, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length=2048, pad_token_id=0):
 
 	input_ids_text = []
 
@@ -1394,7 +1433,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 			# Here we do not consider unpadding thing or spatial concat and always append a newline after each image crop
 
 			if i < len(image_token_indices) - 2:
-				cur_image_info = prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, max_length=max_length)
+				cur_image_info = prepare_image_information(per_crop_token_len, compress_reduce_factor, image_size[batch_idx], is_dummy=False, max_length=max_length)
 				cur_attention_mask_image_full.append(cur_image_info['attention_mask_image_full'])
 				cur_attention_mask_image_compress.append(cur_image_info['attention_mask_image_compress'])
 				cur_attention_mask_newline_full.append(cur_image_info['attention_mask_newline_full'])
@@ -1555,7 +1594,7 @@ class DataCollatorForSupervisedDataset(object):
 		assert padding_side == 'right'
 
 		# print_rank0("Pad token id is", self.tokenizer.pad_token_id)
-
+		image_size = [instance['image_size'] for instance in instances]
 		image2crops_nums = [instance['image2crops_nums'] for instance in instances]
 
 		input_ids_crops_repeated = []
@@ -1571,7 +1610,7 @@ class DataCollatorForSupervisedDataset(object):
 				
 		attention_mask = [cur_input_ids.ne(self.tokenizer.pad_token_id) for cur_input_ids in input_ids_crops_repeated]
 
-		input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, attention_mask_regular_4d, attention_mask_compress_4d = prepare_multimodal_data(input_ids_crops_repeated, labels_crops_repeated, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length, self.tokenizer.pad_token_id)
+		input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, attention_mask_regular_4d, attention_mask_compress_4d = prepare_multimodal_data(input_ids_crops_repeated, labels_crops_repeated, attention_mask, image_size, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length, self.tokenizer.pad_token_id)
 	
 		batch = dict(
 			input_ids=input_ids_text,
