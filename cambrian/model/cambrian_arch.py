@@ -205,9 +205,9 @@ class CambrianMetaModel:
 					# 	svd_init(self.layers[compress_v_start_layer+i], self.vision_mlp_layers[i], bias=True)
 					
 					for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers):
-						self.layers[layer_idx].vision_mlp_layers = VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor, bias=True)
-						if model_args.tune_mm_mlp_adapter:
-							svd_init(self.layers[layer_idx])
+						self.layers[layer_idx].vision_mlp_layers = VisionMLP(self.config, self.config.hidden_size//hidden_size_reduce_factor)
+						# if model_args.tune_mm_mlp_adapter:
+						# 	svd_init(self.layers[layer_idx])
 		else:
 			# In case it is frozen by LoRA
 			for p in self.mm_projector.parameters():
