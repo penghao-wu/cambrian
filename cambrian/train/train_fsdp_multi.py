@@ -1297,24 +1297,21 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, image_
 		attention_mask_image_compress = torch.zeros((dummy_num*height_compress*width_compress,), dtype=torch.bool)
 		position_ids_image_compress = torch.full((dummy_num*height_compress*width_compress,), max_length-1, dtype=torch.long)
 	else:
-		attention_mask_image_full_with_newline = torch.ones((height, width+1), dtype=torch.bool)
+		attention_mask_image_full = torch.ones((height, width), dtype=torch.bool)
 		left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height, width), image_size)
 		if left_offset > 0:
-			attention_mask_image_full_with_newline[:, :left_offset] = 0
+			attention_mask_image_full[:, :left_offset] = 0
 		if right_offset > 0:
-			attention_mask_image_full_with_newline[:, -right_offset-1:-1] = 0
+			attention_mask_image_full[:, -right_offset:] = 0
 		if top_offset > 0:
-			attention_mask_image_full_with_newline[:top_offset, :]=0
+			attention_mask_image_full[:top_offset, :]=0
 		if bottom_offset > 0:
-			attention_mask_image_full_with_newline[-bottom_offset:, :] = 0
-		attention_mask_image_full_with_newline = attention_mask_image_full_with_newline
-		position_ids_image_full_with_newline = attention_mask_image_full_with_newline.cumsum(0)-1
+			attention_mask_image_full[-bottom_offset:, :] = 0
+		attention_mask_image_full = attention_mask_image_full.flatten()
+		position_ids_image_full = attention_mask_image_full.cumsum(0)-1
 
-		attention_mask_image_full = attention_mask_image_full_with_newline[:, :-1].flatten()
-		position_ids_image_full = position_ids_image_full_with_newline[:, :-1].flatten()
-
-		attention_mask_newline_full = attention_mask_image_full_with_newline[:, -1:].flatten()
-		position_ids_newline_full = position_ids_image_full_with_newline[:, -1:].flatten()
+		attention_mask_newline_full = torch.ones((1,), dtype=torch.bool)
+		position_ids_newline_full = torch.full((1,), position_ids_image_full.max()+1, dtype=torch.long)
 
 		attention_mask_image_compress = torch.ones((height_compress,width_compress), dtype=torch.bool)
 		left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height_compress, width_compress), image_size)
@@ -1445,20 +1442,17 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_size, max_n
 				cur_position_ids_image_compress.append(cur_image_info['position_ids_image_compress']+position_id_count)
 				cur_position_ids_newline_full.append(cur_image_info['position_ids_newline_full']+position_id_count)
 
-				# position_id_count += per_crop_token_len+1
-				position_id_count += per_crop_token_len+int(per_crop_token_len**0.5)
+				position_id_count += per_crop_token_len+1
 				
 
 				cur_labels_image_full.append(torch.full((per_crop_token_len,) , IGNORE_INDEX, dtype=torch.long))
 				# most of the labels for newlines should be IGNORE but the very last one
 				# next token is text
 				if i == num_image_crops-1 or image_token_indices[i+1] +1 != image_token_indices[i+2]:
-					# cur_labels_newline_full.append(cur_labels[image_token_indices[i+1]+1:image_token_indices[i+1]+2])
-					cur_labels_newline_full.append(torch.cat([torch.full((int(per_crop_token_len**0.5)-1,), IGNORE_INDEX, dtype=torch.long),cur_labels[image_token_indices[i+1]+1:image_token_indices[i+1]+2]]))
-
+					cur_labels_newline_full.append(cur_labels[image_token_indices[i+1]+1:image_token_indices[i+1]+2])
 				# next token is image
 				else:
-					cur_labels_newline_full.append(torch.full((int(per_crop_token_len**0.5),), IGNORE_INDEX, dtype=torch.long))
+					cur_labels_newline_full.append(torch.full((1,), IGNORE_INDEX, dtype=torch.long))
 
 		# add dummy images & newlines to max_num_image_crops
 		if num_image_crops < max_num_image_crops:
@@ -1496,7 +1490,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_size, max_n
 
 
 	# truncate each text and right pad them to the fixed max length
-	non_text_len = max_num_image_crops*(per_crop_token_len+int(per_crop_token_len**0.5))
+	non_text_len = max_num_image_crops*(per_crop_token_len+1)
 	max_text_len = max_length - non_text_len
 	for batch_idx in range(len(input_ids)):
 		cur_text_len = len(input_ids_text[batch_idx])
