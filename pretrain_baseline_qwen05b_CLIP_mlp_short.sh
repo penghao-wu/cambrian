@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_mask_layer0_square_pretrain_TPU" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_resize_pretrain_TPU" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -33,7 +33,7 @@ python cambrian/train/train_tpu.py \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
-    --image_aspect_ratio square \
+    --image_aspect_ratio resize \
     --bf16 False \
     --output_dir $CKPT_DIR \
     --num_train_epochs 1 \
