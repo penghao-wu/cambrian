@@ -1277,17 +1277,14 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 	else:
 		attention_mask_image_full_withnewline = torch.ones((height * width+1,), dtype=torch.bool)
 		position_ids_image_full_withnewline = (attention_mask_image_full_withnewline.cumsum(0)-1).to(torch.long)
-		position_ids_image_full_withnewline = position_ids_image_full_withnewline*0
 
 		attention_mask_image_full = attention_mask_image_full_withnewline[:-1]
 		attention_mask_newline_full = attention_mask_image_full_withnewline[-1:]
 		position_ids_image_full = position_ids_image_full_withnewline[:-1]
 		position_ids_newline_full = position_ids_image_full_withnewline[-1:]
-		position_ids_newline_full = position_ids_newline_full + 1
 
 		attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
 		position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long)
-		position_ids_image_compress = position_ids_image_compress * 0
 
 	
 	image_info = {}
@@ -1406,8 +1403,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 				cur_position_ids_image_compress.append(cur_image_info['position_ids_image_compress']+position_id_count)
 				cur_position_ids_newline_full.append(cur_image_info['position_ids_newline_full']+position_id_count)
 
-				# position_id_count += per_crop_token_len+1
-				position_id_count += 2
+				position_id_count += per_crop_token_len+1
 				
 
 				cur_labels_image_full.append(torch.full((per_crop_token_len,) , IGNORE_INDEX, dtype=torch.long))
