@@ -25,6 +25,7 @@ from .multimodal_encoder.builder import build_vision_tower_aux_list
 from .multimodal_projector.builder import build_vision_projector
 # from .vision_sampler import VisionTokenSampler, VisionMLP, VisionSA
 from .vision_mlp import VisionMLP, svd_init
+from .vision_sampler import get_2d_sincos_pos_embed
 
 from cambrian.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
@@ -194,6 +195,7 @@ class CambrianMetaModel:
 				self.image_newline = nn.Parameter(
 					torch.randn(self.config.hidden_size, dtype=self.dtype) * embed_std
 				)
+				self.register_buffer("pos_embed", torch.from_numpy(get_2d_sincos_pos_embed(self.config.mm_hidden_size, int(per_crop_token_len**0.5))).float(), persistent=False)
 				if compress_v:
 					num_of_vision_mlp_layers = self.config.num_hidden_layers - compress_v_start_layer
 					self.config.num_of_vision_mlp_layers = num_of_vision_mlp_layers
@@ -414,6 +416,8 @@ class CambrianMetaForCausalLM(ABC):
 		image_features = self.encode_images([images])[0]
 
 		image_features = image_features.view(bs, max_num_image_crops, per_crop_token_len, -1)
+		pos_embed = self.get_model().pos_embed[None, None, :, :].to(image_features.dtype)
+		image_features = image_features +  pos_embed
 
 		image_features = self.get_model().mm_projector(image_features).to(image_features.dtype)
 		image_features = image_features.flatten(1,2)
