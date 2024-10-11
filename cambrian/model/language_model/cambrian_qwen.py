@@ -555,7 +555,8 @@ def Qwen2SdpaAttention_forward(
 
 	attn_output = self.o_proj(attn_output)
 
-	
+	# if sep_sa:
+	# 	attn_output = torch.cat([value_states_image_full, attn_output], 1)
 
 	return attn_output, None, past_key_value
 
@@ -670,7 +671,7 @@ def decoder_forward(
 			hidden_states_image_compress = hidden_states[:, :image_compress_len]
 			hidden_states_image_full = self.vision_mlp_layers.ffn(hidden_states_image_full, hidden_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
 			# hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
-			aux_loss = F.smooth_l1_loss(hidden_states_image_full, hidden_states[:, :hidden_states_image_full])
+			aux_loss = F.smooth_l1_loss(hidden_states_image_full, hidden_states[:, :image_full_len])
 		else:
 			hidden_states = self.mlp(hidden_states)
 		hidden_states = residual + hidden_states
