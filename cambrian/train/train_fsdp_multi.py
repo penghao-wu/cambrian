@@ -276,15 +276,15 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
 		rank = xm.get_ordinal()
 		world_size = xm.xrt_world_size()
 		ckpt_path = f'{ckpt_prefix}_rank-{rank:08d}-of-{world_size:08d}.pth'
-		# ckpt = {
-		# 	'model': weight_to_save,
-		# 	'shard_metadata': trainer.model.get_shard_metadata()
-		# }
-		ckpt_path = f'{ckpt_prefix}.bin'
-		ckpt = weight_to_save
+		ckpt = {
+			'model': weight_to_save,
+			'shard_metadata': trainer.model.get_shard_metadata()
+		}
+		# ckpt_path = f'{ckpt_prefix}.bin'
+		# ckpt = weight_to_save
 		os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
-		if xm.is_master_ordinal(local=False):
-			xm.save(ckpt, ckpt_path, master_only=False)
+		# if xm.is_master_ordinal(local=False):
+		xm.save(ckpt, ckpt_path, master_only=False)
 		print(f'checkpoint saved to {ckpt_path}\n', end='')
 		return
 
@@ -1486,8 +1486,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 	attention_mask = torch.cat([attention_mask_image_full, attention_mask_newline_full, attention_mask_text], 1)
 	position_ids = torch.cat([position_ids_image_full, position_ids_newline_full, position_ids_text], 1)
 
-	# dtype = torch.bfloat16
-	dtype = torch.float32
+	dtype = torch.bfloat16
 
 	# prepare the 4D attention masks for regular attention and compressv attention
 
@@ -1507,7 +1506,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 
 
 	# ee_attention_mask = attention_mask_regular_4d.clone()
-	# min_dtype = torch.finfo(dtype).min
+	# min_dtype = torch.finfo(torch.bfloat16).min
 	# diag_masks = torch.full((len_image_full, len_image_full), min_dtype, dtype=ee_attention_mask.dtype, device=ee_attention_mask.device)
 	# diag_masks.fill_diagonal_(0) 
 	# ee_attention_mask[:, :, :len_image_full, :len_image_full] = diag_masks
@@ -1928,8 +1927,8 @@ def train(INDEX, attn_implementation=None):
 			model.requires_grad_(False)
 			# for p in model.get_model().mm_projector.parameters():
 			#     p.requires_grad = True
-			# tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline', 'vision_mlp_layers']
-			tune_modules = ['vision_mlp_layers']
+			tune_modules = ['mm_projector', 'pos_emb', 'vision_sampler', 'vision_sampler_layers', 'vision_query', 'image_newline', 'vision_mlp_layers']
+			# tune_modules = ['vision_mlp_layers']
 			for name, param in model.named_parameters():
 				if any(listed_name in name for listed_name in tune_modules):
 					print_rank0('tuning {}'.format(name))

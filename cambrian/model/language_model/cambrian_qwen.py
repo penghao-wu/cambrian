@@ -241,7 +241,8 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				# # hidden_states_image_full = decoder_layer.vision_mlp_layers(hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
 				# hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
 
-				aux_loss = layer_outputs[-1]
+				# aux_loss = layer_outputs[-1]
+				aux_loss = 0
 				aux_loss_total += aux_loss/self.config.num_of_vision_mlp_layers
 				if layer_i == len(self.layers) - 1:
 					hidden_states = torch.cat([hidden_states_image_full, hidden_states_newline_full, hidden_states_text], 1)
@@ -391,8 +392,8 @@ class CambrianQwenForCausalLM(Qwen2ForCausalLM, CambrianMetaForCausalLM):
 			shift_labels = shift_labels.to(shift_logits.device)
 			loss = loss_fct(shift_logits, shift_labels)
 		aux_loss_total = outputs.aux_loss
-		# total_loss = loss
-		total_loss = aux_loss_total
+		total_loss = loss
+		# total_loss = aux_loss_total
 		if not return_dict:
 			output = (logits,) + outputs[1:]
 			return {'loss':total_loss, 'logits':logits, 'past_key_values':past_key_values, 'hidden_states':hidden_states, 'lm_loss':loss, 'aux_loss':aux_loss_total}
@@ -666,12 +667,12 @@ def decoder_forward(
 		hidden_states = self.post_attention_layernorm(hidden_states)
 		if sep_sa_ffn:
 			hidden_states_image_full = hidden_states[:, :image_full_len]
-			# hidden_states = hidden_states[:, image_full_len:]
+			hidden_states = hidden_states[:, image_full_len:]
 			hidden_states = self.mlp(hidden_states)
 			hidden_states_image_compress = hidden_states[:, :image_compress_len]
 			hidden_states_image_full = self.vision_mlp_layers.ffn(hidden_states_image_full, hidden_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
-			# hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
-			aux_loss = F.mse_loss(hidden_states_image_full, hidden_states[:, :image_full_len])
+			hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
+			# aux_loss = F.mse_loss(hidden_states_image_full, hidden_states[:, :image_full_len])
 		else:
 			hidden_states = self.mlp(hidden_states)
 		hidden_states = residual + hidden_states
@@ -684,8 +685,8 @@ def decoder_forward(
 		if use_cache:
 			outputs += (present_key_value,)
 
-		if sep_sa_ffn:
-			outputs += (aux_loss,)
+		# if sep_sa_ffn:
+			# outputs += (aux_loss,)
 
 		return outputs
 
