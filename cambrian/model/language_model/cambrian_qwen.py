@@ -239,6 +239,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				hidden_states_newline_full = layer_outputs[0][:, image_compress_len:image_compress_len+newline_full_len]
 				hidden_states_text = layer_outputs[0][:, image_compress_len+newline_full_len:]
 				# hidden_states_image_full = decoder_layer.vision_mlp_layers(hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
+				hidden_states_image_full = layer_outputs[-1][:, :image_full_len]
 				hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
 
 				aux_loss = 0
@@ -555,7 +556,7 @@ def Qwen2SdpaAttention_forward(
 	if sep_sa:
 		attn_output = torch.cat([value_states_image_full, attn_output], 1)
 
-	return attn_output, None, past_key_value
+	return attn_output, None, past_key_value, value_states.transpose(1, 2).contiguous().flatten(2,3)
 
 Qwen2SdpaAttention.forward = Qwen2SdpaAttention_forward
 
@@ -586,7 +587,7 @@ def decoder_forward(
 
 
 		# Cross Attention
-		hidden_states, self_attn_weights, present_key_value = self.self_attn(
+		hidden_states, self_attn_weights, present_key_value, value_states = self.self_attn(
 			hidden_states=hidden_states,
 			kv_states = kv_states,
 			attention_mask=attention_mask,
@@ -612,6 +613,8 @@ def decoder_forward(
 
 		if use_cache:
 			outputs += (present_key_value,)
+
+		outputs += (value_states,)
 
 		return outputs
 
