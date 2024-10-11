@@ -1486,7 +1486,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 	attention_mask = torch.cat([attention_mask_image_full, attention_mask_newline_full, attention_mask_text], 1)
 	position_ids = torch.cat([position_ids_image_full, position_ids_newline_full, position_ids_text], 1)
 
-	dtype = torch.bfloat16
+	# dtype = torch.bfloat16
+	dtype = torch.float32
 
 	# prepare the 4D attention masks for regular attention and compressv attention
 
@@ -1506,7 +1507,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 
 
 	# ee_attention_mask = attention_mask_regular_4d.clone()
-	# min_dtype = torch.finfo(torch.bfloat16).min
+	# min_dtype = torch.finfo(dtype).min
 	# diag_masks = torch.full((len_image_full, len_image_full), min_dtype, dtype=ee_attention_mask.dtype, device=ee_attention_mask.device)
 	# diag_masks.fill_diagonal_(0) 
 	# ee_attention_mask[:, :, :len_image_full, :len_image_full] = diag_masks
