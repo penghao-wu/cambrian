@@ -230,17 +230,16 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						image_full_len
 					)
 
-				# hidden_states_image_full = layer_outputs[0][:, :image_full_len]
-				# hidden_states_image_compress = layer_outputs[0][:, image_full_len:image_full_len+image_compress_len]
-				# hidden_states_newline_full = layer_outputs[0][:, image_full_len+image_compress_len:image_full_len+image_compress_len+newline_full_len]
-				# hidden_states_text = layer_outputs[0][:, image_full_len+image_compress_len+newline_full_len:]
+				hidden_states_image_full = layer_outputs[0][:, :image_full_len]
+				hidden_states_image_compress = layer_outputs[0][:, image_full_len:image_full_len+image_compress_len]
+				hidden_states_newline_full = layer_outputs[0][:, image_full_len+image_compress_len:image_full_len+image_compress_len+newline_full_len]
+				hidden_states_text = layer_outputs[0][:, image_full_len+image_compress_len+newline_full_len:]
 
-				hidden_states_image_compress = layer_outputs[0][:, :image_compress_len]
-				hidden_states_newline_full = layer_outputs[0][:, image_compress_len:image_compress_len+newline_full_len]
-				hidden_states_text = layer_outputs[0][:, image_compress_len+newline_full_len:]
-				# hidden_states_image_full = decoder_layer.vision_mlp_layers(hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
-				hidden_states_image_full = layer_outputs[-1][:, :image_full_len]
-				hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
+				# hidden_states_image_compress = layer_outputs[0][:, :image_compress_len]
+				# hidden_states_newline_full = layer_outputs[0][:, image_compress_len:image_compress_len+newline_full_len]
+				# hidden_states_text = layer_outputs[0][:, image_compress_len+newline_full_len:]
+				# # hidden_states_image_full = decoder_layer.vision_mlp_layers(hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
+				# hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
 
 				aux_loss = 0
 				aux_loss_total += aux_loss/self.config.num_of_vision_mlp_layers
@@ -556,70 +555,11 @@ def Qwen2SdpaAttention_forward(
 	if sep_sa:
 		attn_output = torch.cat([value_states_image_full, attn_output], 1)
 
-	return attn_output, None, past_key_value, value_states.transpose(1, 2).contiguous().flatten(2,3)
+	return attn_output, None, past_key_value
 
 Qwen2SdpaAttention.forward = Qwen2SdpaAttention_forward
 
 
-def decoder_forward(
-	self,
-	hidden_states,
-	attention_mask = None,
-	position_ids_q = None,
-	position_ids_kv = None,
-	past_key_value = None,
-	output_attentions = False,
-	use_cache = False,
-	sep_sa_ffn=False,
-	image_compress_len=36,
-	image_full_len=576,
-	**kwargs,):
-		if sep_sa_ffn:
-			residual = hidden_states[:, image_full_len:]
-			hidden_states = self.input_layernorm(hidden_states)
-			kv_states = hidden_states
-			hidden_states = hidden_states[:, image_full_len:]
-		else:
-			residual = hidden_states
-			hidden_states = self.input_layernorm(hidden_states)
-			kv_states = hidden_states
-
-
-
-		# Cross Attention
-		hidden_states, self_attn_weights, present_key_value, value_states = self.self_attn(
-			hidden_states=hidden_states,
-			kv_states = kv_states,
-			attention_mask=attention_mask,
-			position_ids_q=position_ids_q,
-			position_ids_kv=position_ids_kv,
-			past_key_value=past_key_value,
-			output_attentions=output_attentions,
-			use_cache=use_cache,
-			**kwargs,
-		)
-		hidden_states = residual + hidden_states
-
-		# Fully Connected
-		residual = hidden_states
-		hidden_states = self.post_attention_layernorm(hidden_states)
-		hidden_states = self.mlp(hidden_states)
-		hidden_states = residual + hidden_states
-
-		outputs = (hidden_states,)
-
-		if output_attentions:
-			outputs += (self_attn_weights,)
-
-		if use_cache:
-			outputs += (present_key_value,)
-
-		outputs += (value_states,)
-
-		return outputs
-
-
-# sep sa only
 # def decoder_forward(
 # 	self,
 # 	hidden_states,
@@ -629,12 +569,12 @@ def decoder_forward(
 # 	past_key_value = None,
 # 	output_attentions = False,
 # 	use_cache = False,
-# 	sep_sa_ffn = False,
+# 	sep_sa_ffn=False,
 # 	image_compress_len=36,
 # 	image_full_len=576,
 # 	**kwargs,):
 # 		if sep_sa_ffn:
-# 			residual = hidden_states
+# 			residual = hidden_states[:, image_full_len:]
 # 			hidden_states = self.input_layernorm(hidden_states)
 # 			kv_states = hidden_states
 # 			hidden_states = hidden_states[:, image_full_len:]
@@ -642,6 +582,8 @@ def decoder_forward(
 # 			residual = hidden_states
 # 			hidden_states = self.input_layernorm(hidden_states)
 # 			kv_states = hidden_states
+
+
 
 # 		# Cross Attention
 # 		hidden_states, self_attn_weights, present_key_value = self.self_attn(
@@ -653,10 +595,6 @@ def decoder_forward(
 # 			past_key_value=past_key_value,
 # 			output_attentions=output_attentions,
 # 			use_cache=use_cache,
-# 			sep_sa = sep_sa_ffn,
-# 			image_compress_len=image_compress_len,
-# 			image_full_len=image_full_len,
-# 			vision_mlp=self.vision_mlp_layers if sep_sa_ffn else None,
 # 			**kwargs,
 # 		)
 # 		hidden_states = residual + hidden_states
@@ -664,15 +602,7 @@ def decoder_forward(
 # 		# Fully Connected
 # 		residual = hidden_states
 # 		hidden_states = self.post_attention_layernorm(hidden_states)
-# 		if sep_sa_ffn:
-# 			hidden_states_image_full = hidden_states[:, :image_full_len]
-# 			hidden_states = hidden_states[:, image_full_len:]
-# 			hidden_states = self.mlp(hidden_states)
-# 			hidden_states_image_compress = hidden_states[:, :image_compress_len]
-# 			hidden_states_image_full = self.vision_mlp_layers.ffn(hidden_states_image_full, hidden_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
-# 			hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
-# 		else:
-# 			hidden_states = self.mlp(hidden_states)
+# 		hidden_states = self.mlp(hidden_states)
 # 		hidden_states = residual + hidden_states
 
 # 		outputs = (hidden_states,)
@@ -684,6 +614,73 @@ def decoder_forward(
 # 			outputs += (present_key_value,)
 
 # 		return outputs
+
+
+# sep sa only
+def decoder_forward(
+	self,
+	hidden_states,
+	attention_mask = None,
+	position_ids_q = None,
+	position_ids_kv = None,
+	past_key_value = None,
+	output_attentions = False,
+	use_cache = False,
+	sep_sa_ffn = False,
+	image_compress_len=36,
+	image_full_len=576,
+	**kwargs,):
+		if sep_sa_ffn:
+			residual = hidden_states
+			hidden_states = self.input_layernorm(hidden_states)
+			kv_states = hidden_states
+			hidden_states = hidden_states[:, image_full_len:]
+		else:
+			residual = hidden_states
+			hidden_states = self.input_layernorm(hidden_states)
+			kv_states = hidden_states
+
+		# Cross Attention
+		hidden_states, self_attn_weights, present_key_value = self.self_attn(
+			hidden_states=hidden_states,
+			kv_states = kv_states,
+			attention_mask=attention_mask,
+			position_ids_q=position_ids_q,
+			position_ids_kv=position_ids_kv,
+			past_key_value=past_key_value,
+			output_attentions=output_attentions,
+			use_cache=use_cache,
+			sep_sa = sep_sa_ffn,
+			image_compress_len=image_compress_len,
+			image_full_len=image_full_len,
+			vision_mlp=self.vision_mlp_layers if sep_sa_ffn else None,
+			**kwargs,
+		)
+		hidden_states = residual + hidden_states
+
+		# Fully Connected
+		residual = hidden_states
+		hidden_states = self.post_attention_layernorm(hidden_states)
+		if sep_sa_ffn:
+			hidden_states_image_full = hidden_states[:, :image_full_len]
+			hidden_states = hidden_states[:, image_full_len:]
+			hidden_states = self.mlp(hidden_states)
+			hidden_states_image_compress = hidden_states[:, :image_compress_len]
+			hidden_states_image_full = self.vision_mlp_layers.ffn(hidden_states_image_full, hidden_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
+			hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
+		else:
+			hidden_states = self.mlp(hidden_states)
+		hidden_states = residual + hidden_states
+
+		outputs = (hidden_states,)
+
+		if output_attentions:
+			outputs += (self_attn_weights,)
+
+		if use_cache:
+			outputs += (present_key_value,)
+
+		return outputs
 
 Qwen2DecoderLayer.forward = decoder_forward
 
