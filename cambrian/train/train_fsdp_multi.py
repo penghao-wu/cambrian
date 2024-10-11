@@ -276,15 +276,15 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
 		rank = xm.get_ordinal()
 		world_size = xm.xrt_world_size()
 		ckpt_path = f'{ckpt_prefix}_rank-{rank:08d}-of-{world_size:08d}.pth'
-		ckpt = {
-			'model': weight_to_save,
-			'shard_metadata': trainer.model.get_shard_metadata()
-		}
-		# ckpt_path = f'{ckpt_prefix}.bin'
-		# ckpt = weight_to_save
+		# ckpt = {
+		# 	'model': weight_to_save,
+		# 	'shard_metadata': trainer.model.get_shard_metadata()
+		# }
+		ckpt_path = f'{ckpt_prefix}.bin'
+		ckpt = weight_to_save
 		os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
-		# if xm.is_master_ordinal(local=False):
-		xm.save(ckpt, ckpt_path, master_only=False)
+		if xm.is_master_ordinal(local=False):
+			xm.save(ckpt, ckpt_path, master_only=False)
 		print(f'checkpoint saved to {ckpt_path}\n', end='')
 		return
 

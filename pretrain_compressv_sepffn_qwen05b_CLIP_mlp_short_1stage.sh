@@ -60,8 +60,6 @@ python cambrian/train/train_tpu.py \
     --lazy_preprocess True \
     --report_to wandb \
     --run_name $CKPT_NAME \
-    --fsdp "full_shard" \
-    --fsdp_config fsdp_config.json
 
 
 # CKPT_PATH=checkpoints/$CKPT_NAME
