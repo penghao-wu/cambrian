@@ -215,8 +215,8 @@ def svd_init(decoder_layer, mlp_layer=None):
 class VisionMLP_sa(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
-		self.proj1 = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.proj2 = nn.Linear(intermediate_size, config.hidden_size, bias=False)
+		# self.proj1 = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		# self.proj2 = nn.Linear(intermediate_size, config.hidden_size, bias=False)
 
 		self.hidden_size = config.hidden_size
 		self.num_heads = config.num_attention_heads
@@ -240,6 +240,7 @@ class VisionMLP_sa(nn.Module):
 		# )
 
 	def forward(self, image_full, image_compress=None, compress_reduce_factor=None, per_crop_token_len=576, attention_mask=None):
+		return image_full.transpose(1, 2).contiguous().flatten(2,3)
 		side_len_full = int(per_crop_token_len**0.5)
 		side_len_compress = side_len_full // compress_reduce_factor
 
@@ -274,20 +275,20 @@ class VisionMLP_sa(nn.Module):
 class VisionMLP_ffn(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
-		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-
-		# self.proj = nn.Sequential(
-		# 	nn.Linear(config.hidden_size, intermediate_size, bias=False),
-		# 	nn.SiLU(),
-		# 	nn.Linear(intermediate_size, config.hidden_size, bias=False)
-		# )
+		# self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		# self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 
 		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
+			nn.Linear(config.hidden_size, intermediate_size, bias=False),
 			nn.SiLU(),
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
+
+		# self.proj = nn.Sequential(
+		# 	nn.Linear(intermediate_size*2, intermediate_size, bias=False),
+		# 	nn.SiLU(),
+		# 	nn.Linear(intermediate_size, config.hidden_size, bias=False)
+		# )
 
 
 		# self.proj1 = nn.Linear(config.hidden_size, intermediate_size, bias=False)
@@ -307,24 +308,24 @@ class VisionMLP_ffn(nn.Module):
 		# 	nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		# )
 
-	def forward(self, image_full, image_compress = None, compress_reduce_factor=4, per_crop_token_len=576, attention_mask=None):
-		image_full = self.input_proj(image_full)
-		image_compress = self.context_proj(image_compress)
-
-		side_len_full = int(per_crop_token_len**0.5)
-		side_len_compress = side_len_full // compress_reduce_factor
-		num_image_crops = image_full.shape[1]//per_crop_token_len
-		bs = image_full.shape[0]
-		image_compress = image_compress.view(bs*num_image_crops, side_len_compress, side_len_compress, -1)
-		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2).view(bs, num_image_crops*side_len_full*side_len_full, -1)
-
-		image_full = self.proj(torch.cat([image_full, image_compress], -1))
-		return image_full
-
 	# def forward(self, image_full, image_compress = None, compress_reduce_factor=4, per_crop_token_len=576, attention_mask=None):
-	# 	image_full = self.proj(image_full).to(image_full.dtype)
+	# 	image_full = self.input_proj(image_full)
+	# 	image_compress = self.context_proj(image_compress)
 
+	# 	side_len_full = int(per_crop_token_len**0.5)
+	# 	side_len_compress = side_len_full // compress_reduce_factor
+	# 	num_image_crops = image_full.shape[1]//per_crop_token_len
+	# 	bs = image_full.shape[0]
+	# 	image_compress = image_compress.view(bs*num_image_crops, side_len_compress, side_len_compress, -1)
+	# 	image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2).view(bs, num_image_crops*side_len_full*side_len_full, -1)
+
+	# 	image_full = self.proj(torch.cat([image_full, image_compress], -1))
 	# 	return image_full
+
+	def forward(self, image_full, image_compress = None, compress_reduce_factor=4, per_crop_token_len=576, attention_mask=None):
+		image_full = self.proj(image_full).to(image_full.dtype)
+
+		return image_full
 	
 class VisionMLP(nn.Module):
 	def __init__(self, config, intermediate_size=1024, bias=False):
