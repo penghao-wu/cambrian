@@ -38,6 +38,20 @@ def svd_init(decoder_layer, mlp_layer=None):
 	new_layer1.weight.copy_(W1)
 	new_layer2.weight.copy_(W2)
 
+
+class ConvLayer(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ConvLayer, self).__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.SiLU(),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
 # @torch.no_grad()
 # def svd_init(decoder_layer, mlp_layer=None, bias=False):
 # 	# Extract the original layers
@@ -149,6 +163,7 @@ class VisionMLP(nn.Module):
 		super().__init__()
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		self.input_conv = ConvLayer(intermediate_size, intermediate_size)
 		# self.gate = nn.Sequential(nn.Linear(intermediate_size, intermediate_size, bias=False), nn.Sigmoid())
 		self.proj = nn.Sequential(
 			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
@@ -170,6 +185,8 @@ class VisionMLP(nn.Module):
 		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2)
 		residual = image_full
 		image_full = self.input_proj(image_full)
+		image_full = image_full.permute(0, 3, 1, 2).contiguous()
+		image_full = self.input_conv(image_full).permute(0, 2, 3, 1).contiguous()
 		image_full = torch.cat([image_full, image_compress], -1)
 		# comb_weight = self.gate(image_full + image_compress)
 		# image_full = comb_weight * image_full + (1 - comb_weight) * image_compress
