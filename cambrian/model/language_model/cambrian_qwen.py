@@ -685,7 +685,7 @@ def decoder_forward(
 			outputs += (present_key_value,)
 
 		if sep_sa_ffn:
-			outputs += aux_loss
+			outputs += (aux_loss,)
 
 		return outputs
 
