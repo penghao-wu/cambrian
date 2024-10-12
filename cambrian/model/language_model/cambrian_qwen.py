@@ -551,13 +551,13 @@ def Qwen2SdpaAttention_forward(
 	attn_output = attn_output.transpose(1, 2).contiguous()
 	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
 
-	# if sep_sa:
-	# 	attn_output = torch.cat([value_states_image_full, attn_output], 1)
+	if sep_sa:
+		attn_output = torch.cat([value_states_image_full, attn_output], 1)
 
 	attn_output = self.o_proj(attn_output)
 
-	if sep_sa:
-		attn_output = torch.cat([value_states_image_full, attn_output], 1)
+	# if sep_sa:
+	# 	attn_output = torch.cat([value_states_image_full, attn_output], 1)
 
 	return attn_output, None, past_key_value
 
@@ -665,17 +665,16 @@ def decoder_forward(
 		# Fully Connected
 		residual = hidden_states
 		hidden_states = self.post_attention_layernorm(hidden_states)
-		# if sep_sa_ffn:
-		# 	hidden_states_image_full = hidden_states[:, :image_full_len]
-		# 	hidden_states = hidden_states[:, image_full_len:]
-		# 	hidden_states = self.mlp(hidden_states)
-		# 	hidden_states_image_compress = hidden_states[:, :image_compress_len]
-		# 	hidden_states_image_full = self.vision_mlp_layers.ffn(hidden_states_image_full, hidden_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
-		# 	hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
-		# 	# aux_loss = F.mse_loss(hidden_states_image_full, hidden_states[:, :image_full_len])
-		# else:
-		# 	hidden_states = self.mlp(hidden_states)
-		self.mlp(hidden_states)
+		if sep_sa_ffn:
+			hidden_states_image_full = hidden_states[:, :image_full_len]
+			hidden_states = hidden_states[:, image_full_len:]
+			hidden_states = self.mlp(hidden_states)
+			hidden_states_image_compress = hidden_states[:, :image_compress_len]
+			hidden_states_image_full = self.vision_mlp_layers.ffn(hidden_states_image_full, hidden_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
+			hidden_states = torch.cat([hidden_states_image_full, hidden_states], 1)
+			# aux_loss = F.mse_loss(hidden_states_image_full, hidden_states[:, :image_full_len])
+		else:
+			hidden_states = self.mlp(hidden_states)
 		hidden_states = residual + hidden_states
 
 		outputs = (hidden_states,)
