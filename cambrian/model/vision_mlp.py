@@ -215,8 +215,8 @@ def svd_init(decoder_layer, mlp_layer=None):
 class VisionMLP_sa(nn.Module):
 	def __init__(self, config, intermediate_size=1024):
 		super().__init__()
-		# self.proj1 = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		# self.proj2 = nn.Linear(intermediate_size, config.hidden_size, bias=False)
+		self.proj1 = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		self.proj2 = nn.Linear(intermediate_size, config.hidden_size, bias=False)
 
 		self.hidden_size = config.hidden_size
 		self.num_heads = config.num_attention_heads
@@ -240,7 +240,7 @@ class VisionMLP_sa(nn.Module):
 		# )
 
 	def forward(self, image_full, image_compress=None, compress_reduce_factor=None, per_crop_token_len=576, attention_mask=None):
-		return image_full.transpose(1, 2).contiguous().flatten(2,3)
+		# return image_full.transpose(1, 2).contiguous().flatten(2,3)
 		side_len_full = int(per_crop_token_len**0.5)
 		side_len_compress = side_len_full // compress_reduce_factor
 
@@ -332,7 +332,7 @@ class VisionMLP(nn.Module):
 		super().__init__()
 		self.sa = VisionMLP_sa(config, intermediate_size)
 		# self.sa = nn.Identity()
-		self.ffn = VisionMLP_ffn(config, intermediate_size)
+		# self.ffn = VisionMLP_ffn(config, intermediate_size)
 
 
 	# def forward(self, image_full, image_compress, compress_reduce_factor, per_crop_token_len=576, attention_mask=None):

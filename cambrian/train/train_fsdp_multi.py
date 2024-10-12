@@ -1298,46 +1298,46 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, image_
 		attention_mask_image_compress = torch.zeros((dummy_num*height_compress*width_compress,), dtype=torch.bool)
 		position_ids_image_compress = torch.full((dummy_num*height_compress*width_compress,), max_length-1, dtype=torch.long)
 	else:
-		# attention_mask_image_full_withnewline = torch.ones((height * width+1,), dtype=torch.bool)
-		# position_ids_image_full_withnewline = (attention_mask_image_full_withnewline.cumsum(0)-1).to(torch.long)
+		attention_mask_image_full_withnewline = torch.ones((height * width+1,), dtype=torch.bool)
+		position_ids_image_full_withnewline = (attention_mask_image_full_withnewline.cumsum(0)-1).to(torch.long)
 
-		# attention_mask_image_full = attention_mask_image_full_withnewline[:-1]
-		# attention_mask_newline_full = attention_mask_image_full_withnewline[-1:]
-		# position_ids_image_full = position_ids_image_full_withnewline[:-1]
-		# position_ids_newline_full = position_ids_image_full_withnewline[-1:]
+		attention_mask_image_full = attention_mask_image_full_withnewline[:-1]
+		attention_mask_newline_full = attention_mask_image_full_withnewline[-1:]
+		position_ids_image_full = position_ids_image_full_withnewline[:-1]
+		position_ids_newline_full = position_ids_image_full_withnewline[-1:]
 
-		# attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
-		# position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long)
+		attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
+		position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long)
 
 
-		attention_mask_image_full = torch.ones((height, width), dtype=torch.bool)
-		left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height, width), image_size)
-		if left_offset > 0:
-			attention_mask_image_full[:, :left_offset] = 0
-		if right_offset > 0:
-			attention_mask_image_full[:, -right_offset:] = 0
-		if top_offset > 0:
-			attention_mask_image_full[:top_offset, :]=0
-		if bottom_offset > 0:
-			attention_mask_image_full[-bottom_offset:, :] = 0
-		attention_mask_image_full = attention_mask_image_full.flatten()
-		position_ids_image_full = attention_mask_image_full.cumsum(0)-1
+		# attention_mask_image_full = torch.ones((height, width), dtype=torch.bool)
+		# left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height, width), image_size)
+		# if left_offset > 0:
+		# 	attention_mask_image_full[:, :left_offset] = 0
+		# if right_offset > 0:
+		# 	attention_mask_image_full[:, -right_offset:] = 0
+		# if top_offset > 0:
+		# 	attention_mask_image_full[:top_offset, :]=0
+		# if bottom_offset > 0:
+		# 	attention_mask_image_full[-bottom_offset:, :] = 0
+		# attention_mask_image_full = attention_mask_image_full.flatten()
+		# position_ids_image_full = attention_mask_image_full.cumsum(0)-1
 
-		attention_mask_newline_full = torch.ones((1,), dtype=torch.bool)
-		position_ids_newline_full = torch.full((1,), position_ids_image_full.max()+1, dtype=torch.long)
+		# attention_mask_newline_full = torch.ones((1,), dtype=torch.bool)
+		# position_ids_newline_full = torch.full((1,), position_ids_image_full.max()+1, dtype=torch.long)
 
-		attention_mask_image_compress = torch.ones((height_compress,width_compress), dtype=torch.bool)
-		left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height_compress, width_compress), image_size)
-		if left_offset > 0:
-			attention_mask_image_compress[:, :left_offset] = 0
-		if right_offset > 0:
-			attention_mask_image_compress[:, -right_offset:] = 0
-		if top_offset > 0:
-			attention_mask_image_compress[:top_offset, :]=0
-		if bottom_offset > 0:
-			attention_mask_image_compress[-bottom_offset:, :] = 0
-		attention_mask_image_compress = attention_mask_image_compress.flatten()
-		position_ids_image_compress = attention_mask_image_compress.cumsum(0)-1
+		# attention_mask_image_compress = torch.ones((height_compress,width_compress), dtype=torch.bool)
+		# left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height_compress, width_compress), image_size)
+		# if left_offset > 0:
+		# 	attention_mask_image_compress[:, :left_offset] = 0
+		# if right_offset > 0:
+		# 	attention_mask_image_compress[:, -right_offset:] = 0
+		# if top_offset > 0:
+		# 	attention_mask_image_compress[:top_offset, :]=0
+		# if bottom_offset > 0:
+		# 	attention_mask_image_compress[-bottom_offset:, :] = 0
+		# attention_mask_image_compress = attention_mask_image_compress.flatten()
+		# position_ids_image_compress = attention_mask_image_compress.cumsum(0)-1
 
 	
 	image_info = {}
@@ -1456,8 +1456,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_size, max_n
 				cur_position_ids_image_compress.append(cur_image_info['position_ids_image_compress']+position_id_count)
 				cur_position_ids_newline_full.append(cur_image_info['position_ids_newline_full']+position_id_count)
 
-				# position_id_count += per_crop_token_len+1
-				position_id_count += cur_image_info['position_ids_newline_full'].max() + 1
+				position_id_count += per_crop_token_len+1
+				# position_id_count += cur_image_info['position_ids_newline_full'].max() + 1
 				
 
 				cur_labels_image_full.append(torch.full((per_crop_token_len,) , IGNORE_INDEX, dtype=torch.long))
