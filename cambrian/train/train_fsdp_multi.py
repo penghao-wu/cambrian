@@ -1604,7 +1604,7 @@ class DataCollatorForSupervisedDataset(object):
 		assert padding_side == 'right'
 
 		# print_rank0("Pad token id is", self.tokenizer.pad_token_id)
-
+		image_size = [instance['image_size'] for instance in instances]
 		image2crops_nums = [instance['image2crops_nums'] for instance in instances]
 
 		input_ids_crops_repeated = []
@@ -1620,7 +1620,7 @@ class DataCollatorForSupervisedDataset(object):
 				
 		attention_mask = [cur_input_ids.ne(self.tokenizer.pad_token_id) for cur_input_ids in input_ids_crops_repeated]
 
-		input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, attention_mask_regular_4d, attention_mask_compress_4d = prepare_multimodal_data(input_ids_crops_repeated, labels_crops_repeated, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length, self.tokenizer.pad_token_id)
+		input_ids_text, labels, attention_mask, position_ids, position_ids_image_compress, attention_mask_regular_4d, attention_mask_compress_4d = prepare_multimodal_data(input_ids_crops_repeated, labels_crops_repeated, attention_mask, image_size, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length, self.tokenizer.pad_token_id)
 	
 		batch = dict(
 			input_ids=input_ids_text,
