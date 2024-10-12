@@ -16,7 +16,7 @@ python cambrian/train/train_tpu.py \
     --image_folder /mnt/disks/storage/data/finetune_data \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
-    --pretrain_mm_mlp_adapter ./compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_resize_pretrain_TPU/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./compressv_qwen05b_CLIP_mlp_baseline_shareGPT4V_unpad_pretrain_TPU/mm_projector.bin \
     --max_num_image_crops 1 \
     --per_crop_token_len 576 \
     --compress_reduce_factor 4 \
