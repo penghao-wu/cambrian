@@ -1367,7 +1367,7 @@ def calculate_causal_attention_mask(position_ids_q, position_ids_kv, attention_m
 	return causal_mask
 	
 
-def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length=2048, pad_token_id=0):
+def prepare_multimodal_data(input_ids, labels, attention_mask, image_size, max_num_image_crops, per_crop_token_len, compress_reduce_factor, max_length=2048, pad_token_id=0):
 
 	input_ids_text = []
 
@@ -1447,7 +1447,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 			# Here we do not consider unpadding thing or spatial concat and always append a newline after each image crop
 
 			if i < len(image_token_indices) - 2:
-				cur_image_info = prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, max_length=max_length)
+				cur_image_info = prepare_image_information(per_crop_token_len, compress_reduce_factor, image_size[batch_idx], is_dummy=False, max_length=max_length)
 				cur_attention_mask_image_full.append(cur_image_info['attention_mask_image_full'])
 				cur_attention_mask_image_compress.append(cur_image_info['attention_mask_image_compress'])
 				cur_attention_mask_newline_full.append(cur_image_info['attention_mask_newline_full'])
