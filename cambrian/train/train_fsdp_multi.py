@@ -1262,7 +1262,26 @@ class LazySupervisedDataset(Dataset):
 		data_dict['image2crops_nums'] = image2crops_nums
 		return data_dict
 
-def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, dummy_num=1, max_length=2048):
+def get_padding_offset(cur_size, original_size):
+	cur_w, cur_h = cur_size
+	original_w, original_h = original_size
+
+	original_aspect_ratio = original_w / original_h
+	current_aspect_ratio = cur_w / cur_h
+
+	if original_aspect_ratio > current_aspect_ratio:
+		scale_factor = cur_w / original_w
+		new_height = int(np.ceil(original_h * scale_factor))
+		padding = (cur_h - new_height) // 2
+		return 0, 0, padding, padding
+	else:
+		scale_factor = cur_h / original_h
+		new_width = int(np.ceil(original_w * scale_factor))
+		padding = (cur_w - new_width) // 2
+		return padding, padding, 0, 0
+
+
+def prepare_image_information(per_crop_token_len, compress_reduce_factor, image_size, is_dummy=False, dummy_num=1, max_length=2048):
 	height = width = int(per_crop_token_len**0.5)
 	height_compress = width_compress = height // compress_reduce_factor
 
@@ -1275,16 +1294,46 @@ def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dum
 		attention_mask_image_compress = torch.zeros((dummy_num*height_compress*width_compress,), dtype=torch.bool)
 		position_ids_image_compress = torch.full((dummy_num*height_compress*width_compress,), max_length-1, dtype=torch.long)
 	else:
-		attention_mask_image_full_withnewline = torch.ones((height * width+1,), dtype=torch.bool)
-		position_ids_image_full_withnewline = (attention_mask_image_full_withnewline.cumsum(0)-1).to(torch.long)
+		# attention_mask_image_full_withnewline = torch.ones((height * width+1,), dtype=torch.bool)
+		# position_ids_image_full_withnewline = (attention_mask_image_full_withnewline.cumsum(0)-1).to(torch.long)
 
-		attention_mask_image_full = attention_mask_image_full_withnewline[:-1]
-		attention_mask_newline_full = attention_mask_image_full_withnewline[-1:]
-		position_ids_image_full = position_ids_image_full_withnewline[:-1]
-		position_ids_newline_full = position_ids_image_full_withnewline[-1:]
+		# attention_mask_image_full = attention_mask_image_full_withnewline[:-1]
+		# attention_mask_newline_full = attention_mask_image_full_withnewline[-1:]
+		# position_ids_image_full = position_ids_image_full_withnewline[:-1]
+		# position_ids_newline_full = position_ids_image_full_withnewline[-1:]
 
-		attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
-		position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long)
+		# attention_mask_image_compress = torch.ones((height_compress * width_compress,), dtype=torch.bool)
+		# position_ids_image_compress = (attention_mask_image_compress.cumsum(0)-1).to(torch.long)
+
+
+		attention_mask_image_full = torch.ones((height, width), dtype=torch.bool)
+		left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height, width), image_size)
+		if left_offset > 0:
+			attention_mask_image_full[:, :left_offset] = 0
+		if right_offset > 0:
+			attention_mask_image_full[:, -right_offset:] = 0
+		if top_offset > 0:
+			attention_mask_image_full[:top_offset, :]=0
+		if bottom_offset > 0:
+			attention_mask_image_full[-bottom_offset:, :] = 0
+		attention_mask_image_full = attention_mask_image_full.flatten()
+		position_ids_image_full = attention_mask_image_full.cumsum(0)-1
+
+		attention_mask_newline_full = torch.ones((1,), dtype=torch.bool)
+		position_ids_newline_full = torch.full((1,), position_ids_image_full.max()+1, dtype=torch.long)
+
+		attention_mask_image_compress = torch.ones((height_compress,width_compress), dtype=torch.bool)
+		left_offset, right_offset, top_offset, bottom_offset = get_padding_offset((height_compress, width_compress), image_size)
+		if left_offset > 0:
+			attention_mask_image_compress[:, :left_offset] = 0
+		if right_offset > 0:
+			attention_mask_image_compress[:, -right_offset:] = 0
+		if top_offset > 0:
+			attention_mask_image_compress[:top_offset, :]=0
+		if bottom_offset > 0:
+			attention_mask_image_compress[-bottom_offset:, :] = 0
+		attention_mask_image_compress = attention_mask_image_compress.flatten()
+		position_ids_image_compress = attention_mask_image_compress.cumsum(0)-1
 
 	
 	image_info = {}
