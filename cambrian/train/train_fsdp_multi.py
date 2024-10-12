@@ -1442,7 +1442,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_size, max_n
 				cur_position_ids_image_compress.append(cur_image_info['position_ids_image_compress']+position_id_count)
 				cur_position_ids_newline_full.append(cur_image_info['position_ids_newline_full']+position_id_count)
 
-				position_id_count += per_crop_token_len+1
+				# position_id_count += per_crop_token_len+1
+				position_id_count = cur_image_info['position_ids_newline_full'].max() +1 
 				
 
 				cur_labels_image_full.append(torch.full((per_crop_token_len,) , IGNORE_INDEX, dtype=torch.long))
