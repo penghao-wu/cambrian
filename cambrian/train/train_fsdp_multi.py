@@ -1148,6 +1148,7 @@ class LazySupervisedDataset(Dataset):
 		images = []
 		# for a anyres image, we treat each crop as a single image and we need to repeat the <image>, so we record this value here
 		image2crops_nums = []
+		image_size = []
 		if has_image:
 			image_file = dat['image']
 			if type(image_file) is list:
@@ -1160,6 +1161,7 @@ class LazySupervisedDataset(Dataset):
 
 			images = torch.cat([img[0] for img in image])
 			image2crops_nums = [img[2] for img in image]
+			image_size = image[0][1]
 			sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
 
 		elif "video" in sources[0]:
@@ -1259,7 +1261,9 @@ class LazySupervisedDataset(Dataset):
 			# image does not exist in the data, but the model is multimodal
 			processor = self.data_args.image_processor_aux_list[0]
 			data_dict['images'] = torch.zeros(self.data_args.max_num_image_crops, 3, processor.crop_size['height'], processor.crop_size['width'])
+			image_size = (processor.crop_size['width'], processor.crop_size['height'])
 		data_dict['image2crops_nums'] = image2crops_nums
+		data_dict['image_size'] = image_size
 		return data_dict
 
 def get_padding_offset(cur_size, original_size):
@@ -1452,7 +1456,8 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, max_num_image_cro
 				cur_position_ids_image_compress.append(cur_image_info['position_ids_image_compress']+position_id_count)
 				cur_position_ids_newline_full.append(cur_image_info['position_ids_newline_full']+position_id_count)
 
-				position_id_count += per_crop_token_len+1
+				# position_id_count += per_crop_token_len+1
+				position_id_count += cur_image_info['position_ids_newline_full'].max() + 1
 				
 
 				cur_labels_image_full.append(torch.full((per_crop_token_len,) , IGNORE_INDEX, dtype=torch.long))
