@@ -38,6 +38,18 @@ def svd_init(decoder_layer, mlp_layer=None):
 	new_layer1.weight.copy_(W1)
 	new_layer2.weight.copy_(W2)
 
+class ConvLayer(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ConvLayer, self).__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            # nn.SiLU(),
+            # nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
 # @torch.no_grad()
 # def svd_init(decoder_layer, mlp_layer=None, bias=False):
 # 	# Extract the original layers
@@ -225,6 +237,7 @@ class VisionMLP_sa(nn.Module):
 
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		self.input_conv = ConvLayer(intermediate_size, intermediate_size)
 		self.proj = nn.Sequential(
 			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
 			nn.SiLU(),
@@ -277,6 +290,7 @@ class VisionMLP_sa(nn.Module):
 		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2).view(bs, num_image_crops*side_len_full*side_len_full, -1)
 
 		image_full = self.input_proj(image_full)
+		image_full = image_full + self.input_conv(image_full)
 		image_full = self.proj(torch.cat([image_full, image_compress], -1))
 
 		return image_full
