@@ -290,7 +290,7 @@ class VisionMLP_sa(nn.Module):
 		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2).view(bs, num_image_crops*side_len_full*side_len_full, -1)
 		image_full = self.input_proj(image_full)
 		image_full = image_full.view(bs*num_image_crops, side_len_full, side_len_full, -1)
-		image_full = image_full + self.input_conv(image_full.permute(0, 3, 1, 2).contiguous()).permute(0, 2, 3, 1).contiguous().view(bs, num_image_crops*side_len_full*side_len_full, -1)
+		image_full = (image_full + self.input_conv(image_full.permute(0, 3, 1, 2).contiguous()).permute(0, 2, 3, 1).contiguous()).view(bs, num_image_crops*side_len_full*side_len_full, -1)
 		image_full = self.proj(torch.cat([image_full, image_compress], -1))
 
 		return image_full
