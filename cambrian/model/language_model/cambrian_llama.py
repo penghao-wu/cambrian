@@ -532,18 +532,27 @@ def LlamaSdpaAttention_forward(
 		is_causal=self.is_causal and attention_mask is None and q_len > 1,
 	)
 
-	if sep_sa:
-		value_states_image_full = value_states[:, :, :image_full_len]
-		value_states_image_compress = attn_output[:, :, :image_compress_len]
-		value_states_image_full = vision_mlp.sa(value_states_image_full, value_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
+	# if sep_sa:
+	# 	value_states_image_full = value_states[:, :, :image_full_len]
+	# 	value_states_image_compress = attn_output[:, :, :image_compress_len]
+	# 	value_states_image_full = vision_mlp.sa(value_states_image_full, value_states_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
 
 	attn_output = attn_output.transpose(1, 2).contiguous()
-	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)		
+	attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
+
+	# if sep_sa:
+	# 	attn_output = torch.cat([value_states_image_full, attn_output], 1)
 
 	attn_output = self.o_proj(attn_output)
 
 	if sep_sa:
+		kv_states_image_full = kv_states[:, :image_full_len]
+		output_image_compress = attn_output[:, :image_compress_len]
+		value_states_image_full = vision_mlp.sa(kv_states_image_full, output_image_compress, int((image_full_len//image_compress_len)**0.5), image_full_len)
 		attn_output = torch.cat([value_states_image_full, attn_output], 1)
+
+	# if sep_sa:
+	# 	attn_output = torch.cat([value_states_image_full, attn_output], 1)
 
 	return attn_output, None, past_key_value
 # def LlamaSdpaAttention_forward(

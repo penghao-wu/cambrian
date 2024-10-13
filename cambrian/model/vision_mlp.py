@@ -223,10 +223,10 @@ class VisionMLP_sa(nn.Module):
 		self.head_dim = self.hidden_size // self.num_heads
 
 
-		# self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
+		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		self.proj = nn.Sequential(
-			nn.Linear(intermediate_size, intermediate_size, bias=False),
+			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
 			nn.SiLU(),
 			nn.Linear(intermediate_size, config.hidden_size, bias=False)
 		)
@@ -272,13 +272,12 @@ class VisionMLP_sa(nn.Module):
 		num_image_crops = image_full.shape[1]//per_crop_token_len
 		bs = image_full.shape[0]
 
-		# image_compress = image_compress.view(bs*num_image_crops, side_len_compress, side_len_compress, -1)
-		# image_compress = self.context_proj(image_compress)
-		# image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2).view(bs, num_image_crops*side_len_full*side_len_full, -1)
+		image_compress = image_compress.view(bs*num_image_crops, side_len_compress, side_len_compress, -1)
+		image_compress = self.context_proj(image_compress)
+		image_compress = image_compress.repeat_interleave(compress_reduce_factor, 1).repeat_interleave(compress_reduce_factor, 2).view(bs, num_image_crops*side_len_full*side_len_full, -1)
 
 		image_full = self.input_proj(image_full)
-		# image_full = self.proj(torch.cat([image_full, image_compress], -1))
-		image_full = self.proj(image_full)
+		image_full = self.proj(torch.cat([image_full, image_compress], -1))
 
 		return image_full
 	
