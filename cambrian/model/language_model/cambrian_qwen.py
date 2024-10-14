@@ -230,16 +230,16 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 						image_full_len
 					)
 
-				hidden_states_image_full = layer_outputs[0][:, :image_full_len]
-				hidden_states_image_compress = layer_outputs[0][:, image_full_len:image_full_len+image_compress_len]
-				hidden_states_newline_full = layer_outputs[0][:, image_full_len+image_compress_len:image_full_len+image_compress_len+newline_full_len]
-				hidden_states_text = layer_outputs[0][:, image_full_len+image_compress_len+newline_full_len:]
+				# hidden_states_image_full = layer_outputs[0][:, :image_full_len]
+				# hidden_states_image_compress = layer_outputs[0][:, image_full_len:image_full_len+image_compress_len]
+				# hidden_states_newline_full = layer_outputs[0][:, image_full_len+image_compress_len:image_full_len+image_compress_len+newline_full_len]
+				# hidden_states_text = layer_outputs[0][:, image_full_len+image_compress_len+newline_full_len:]
 
-				# hidden_states_image_compress = layer_outputs[0][:, :image_compress_len]
-				# hidden_states_newline_full = layer_outputs[0][:, image_compress_len:image_compress_len+newline_full_len]
-				# hidden_states_text = layer_outputs[0][:, image_compress_len+newline_full_len:]
-				# # hidden_states_image_full = decoder_layer.vision_mlp_layers(hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
-				# hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
+				hidden_states_image_compress = layer_outputs[0][:, :image_compress_len]
+				hidden_states_newline_full = layer_outputs[0][:, image_compress_len:image_compress_len+newline_full_len]
+				hidden_states_text = layer_outputs[0][:, image_compress_len+newline_full_len:]
+				# hidden_states_image_full = decoder_layer.vision_mlp_layers(hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
+				hidden_states_image_full = self.vision_mlp_layers[layer_i-compress_v_start_layer](hidden_states_image_full, hidden_states_image_compress, compress_reduce_factor, per_crop_token_len)
 
 				# aux_loss = layer_outputs[-1]
 				aux_loss = 0
