@@ -160,12 +160,7 @@ class VisionMLP(nn.Module):
 	def __init__(self, config, intermediate_size):
 		super().__init__()
 		self.context_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		# self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
-		self.input_proj = nn.Sequential(
-			nn.Linear(config.hidden_size, intermediate_size, bias=False),
-			nn.SiLU(),
-			nn.Linear(intermediate_size, intermediate_size, bias=False)
-		)
+		self.input_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
 		# self.gate = nn.Sequential(nn.Linear(intermediate_size, intermediate_size, bias=False), nn.Sigmoid())
 		self.proj = nn.Sequential(
 			nn.Linear(intermediate_size*2, intermediate_size, bias=False),
