@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_pad_finetune_738k_TPU_lr3" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_baseline_pad_finetune_738k_TPU_lr4" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -45,7 +45,7 @@ python cambrian/train/train_tpu.py \
     --save_strategy "steps" \
     --save_steps 500000 \
     --save_total_limit 1 \
-    --learning_rate 3e-5 \
+    --learning_rate 4e-5 \
     --weight_decay 0. \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
