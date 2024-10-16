@@ -174,7 +174,7 @@ class CambrianQwenModel(CambrianMetaModel, Qwen2Model):
 				hidden_states_sys = layer_outputs[0][:, :vision_token_start_idx]
 
 				# hidden_states_vision_full = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num+len_text:]
-				hidden_states_vision_full = self.vision_sampler_layers[i-compress_v_start_layer](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+				hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
 
 				hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1)
 
