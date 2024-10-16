@@ -16,8 +16,6 @@ python cambrian/train/train_tpu.py \
     --vision_tower_aux_token_len_list '[576]' \
     --image_token_len 576 \
     --image_token_len_concise 36 \
-    --compress_v True \
-    --compress_v_start_layer 12 \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \
