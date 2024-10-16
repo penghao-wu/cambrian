@@ -190,7 +190,7 @@ class CambrianMetaModel:
                 )
                 if compress_v:
                     self.vision_sampler_layers = nn.ModuleList(
-						[VisionMLP(self.config, self.config.hidden_size//2) for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers)]
+						[VisionMLP(self.config, self.config.hidden_size//2) for layer_idx in range(0, self.config.num_hidden_layers)]
 						)
                 # for i in range(self.config.num_hidden_layers):
                     # self.layers[i].vision_sampler_layers = VisionMLP(self.config)
