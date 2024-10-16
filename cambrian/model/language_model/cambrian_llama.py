@@ -173,21 +173,11 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 
 		hidden_states = inputs_embeds
 
-		skip_layers = [_ for _ in range(15, 32)]
-		skip_layers += [0,1,2,3,4]
-		skip_layers = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
-		skip_layers = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
-		skip_layers = [0, 1, 2, 3 , 4, 5, 6, 7, 8, 9, 10]
-
-		skip_layers = [12, 15, 18, 21, 24, 27, 30]
-		skip_layers = [_ for _ in range(0, 32)]
-		# skip_layers = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
-		# skip_layers = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
-		# skip_layers = [_ for _ in range(0, 32)]
-		skip_layers = [_ for _ in range(11, 32)]
-		# skip_layers += [0, 1, 2, 3, 4, 5]
-		# skip_layers = []
-		# skip_layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+		skip_layers = []
+		compress_v = self.config.compress_v
+		if compress_v:
+			compress_v_start_layer = self.config.compress_v_start_layer
+			skip_layers = [_ for _ in range(compress_v_start_layer, len(self.layers))]
 		aux_loss_total = 0
 		for i, decoder_layer in enumerate(self.layers):
 			if output_hidden_states:
@@ -292,9 +282,10 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 				hidden_states_sys = layer_outputs[0][:, :vision_token_start_idx]
 
 				# hidden_states_vision_full = layer_outputs[0][:, vision_token_start_idx+image_token_concise_newline_num+len_text:]
-				hidden_states_vision_full = self.vision_sampler_layers[i](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
+				hidden_states_vision_full = self.vision_sampler_layers[i-compress_v_start_layer](hidden_states_vision_full, hidden_states_vision_concise, image_token_len_per_side, image_token_len_per_side_concise, vision_full_attention_mask)
 
 				# hidden_states_sys, hidden_states_vision_concise, hidden_states_vision_full, hidden_states_text = torch.split(layer_outputs[0], [len_sys, len_vision_concise, len_vision_full, len_text], 1)
+				hidden_states = torch.cat([hidden_states_sys, hidden_states_vision_full, hidden_states_text], dim=1)
 
 				aux_loss_total = 0
 
@@ -394,19 +385,19 @@ class CambrianLlamaModel(CambrianMetaModel, LlamaModel):
 			# update vision full with concise
 			
 
-		hidden_states_text = self.norm(hidden_states_text)
+		hidden_states = self.norm(hidden_states)
 		aux_loss_total = aux_loss_total
 
 		# add hidden states from the last decoder layer
 		if output_hidden_states:
-			all_hidden_states += (hidden_states_text,)
+			all_hidden_states += (hidden_states,)
 
 		next_cache = None
 
 		if not return_dict:
-			return tuple(v for v in [hidden_states_text, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
+			return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns, aux_loss_total] if v is not None)
 		return BaseModelOutputWithPastWithAuxLoss(
-			last_hidden_state=hidden_states_text,
+			last_hidden_state=hidden_states,
 			past_key_values=next_cache,
 			hidden_states=all_hidden_states,
 			attentions=all_self_attns,
