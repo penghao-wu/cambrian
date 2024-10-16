@@ -118,6 +118,8 @@ class CambrianMetaModel:
         pretrain_mm_mlp_adapter = model_args.pretrain_mm_mlp_adapter
         connector_only = model_args.connector_only
         connector_depth = model_args.connector_depth
+        compress_v = model_args.compress_v
+        compress_v_start_layer = model_args.compress_v_start_layer
 
         # self.config.mm_vision_tower = vision_tower
         self.config.image_token_len = image_token_len
@@ -128,6 +130,8 @@ class CambrianMetaModel:
         self.config.mm_vision_tower_aux_list = vision_tower_aux_list
         self.config.mm_vision_tower_aux_token_len_list = vision_tower_aux_token_len_list
         self.config.connector_only = connector_only
+        self.config.compress_v = compress_v
+        self.config.compress_v_start_layer = compress_v_start_layer
 
         if self.get_vision_tower_aux_list() is None:
             vision_tower_aux_list = build_vision_tower_aux_list(model_args)
@@ -184,9 +188,10 @@ class CambrianMetaModel:
                 self.image_newline = nn.Parameter(
                     torch.randn(self.config.hidden_size, dtype=self.dtype) * embed_std
                 )
-                self.vision_sampler_layers = nn.ModuleList(
-                    [VisionMLP(self.config, self.config.hidden_size//2) for layer_idx in range(0, self.config.num_hidden_layers)]
-                    )
+                if compress_v:
+                    self.vision_sampler_layers = nn.ModuleList(
+						[VisionMLP(self.config, self.config.hidden_size//2) for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers)]
+						)
                 # for i in range(self.config.num_hidden_layers):
                     # self.layers[i].vision_sampler_layers = VisionMLP(self.config)
 

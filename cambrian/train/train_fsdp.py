@@ -106,6 +106,8 @@ class ModelArguments:
 	num_of_vision_sampler_layers: Optional[int] = field(default=10)
 	start_of_vision_sampler_layers: Optional[int] = field(default=16)
 	stride_of_vision_sampler_layers: Optional[int] = field(default=1)
+	compress_v: bool = field(default=False)
+	compress_v_start_layer: Optional[int] = field(default=0)
 
 
 @dataclass
