@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_baseline_pad_finetune_737k_old_TPU" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_layer11_pad_finetune_737k_old_TPU" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -14,9 +14,11 @@ python cambrian/train/train_tpu.py \
     --version v1 \
     --data_path /mnt/disks/storage/data/finetune_data/jsons/737k.jsonl \
     --image_folder /mnt/disks/storage/data/finetune_data \
-    --pretrain_mm_mlp_adapter ./cambrian_7b_CLIP_mlp_baseline_shareGPT4V_unpad_pretrain_lr1e4_old_TPU/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./cambrian_7b_CLIP_mlp_2scale_layer11_shareGPT4V_unpad_pretrain_lr1e4_old_TPU/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
+    --compress_v_start_layer 11 \
+    --compress_v True \
     --image_token_len 576 \
     --image_token_len_concise 36 \
     --num_query_group 1 \
