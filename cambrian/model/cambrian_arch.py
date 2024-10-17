@@ -191,9 +191,14 @@ class CambrianMetaModel:
 					torch.randn(self.config.hidden_size, dtype=self.dtype) * embed_std
 				)
 				if compress_v:
-					self.vision_sampler_layers = nn.ModuleList(
+					if self.config.hidden_size < 896:
+						self.vision_sampler_layers = nn.ModuleList(
 						[VisionMLP(self.config, self.config.hidden_size//2) for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers)]
 						)
+					else:
+						self.vision_sampler_layers = nn.ModuleList(
+							[VisionMLP(self.config, self.config.hidden_size//4) for layer_idx in range(compress_v_start_layer, self.config.num_hidden_layers)]
+							)
 				# for i in range(self.config.num_hidden_layers):
 					# self.layers[i].vision_sampler_layers = VisionMLP(self.config)
 
