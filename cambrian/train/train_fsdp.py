@@ -1128,7 +1128,7 @@ def get_padding_offset(cur_size, original_size):
 
 	original_aspect_ratio = original_w / original_h
 	current_aspect_ratio = cur_w / cur_h
-	# return 0,0,0,0
+	return 0,0,0,0
 	if original_aspect_ratio > current_aspect_ratio:
 		scale_factor = cur_w / original_w
 		new_height = int(np.ceil(original_h * scale_factor))

@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_layer11_shareGPT4V_unpad_pretrain_lr1e4_old_TPU" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_layer11_shareGPT4V_pad_pretrain_lr1e4_old_TPU" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 

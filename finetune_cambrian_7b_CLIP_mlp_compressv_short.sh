@@ -14,7 +14,7 @@ python cambrian/train/train_tpu.py \
     --version v1 \
     --data_path ./llava_next_raw_format_processed.jsonl\
     --image_folder ./llava_next \
-    --pretrain_mm_mlp_adapter ./cambrian_7b_CLIP_mlp_2scale_layer11_shareGPT4V_unpad_pretrain_lr1e4_old_TPU/mm_projector.bin \
+    --pretrain_mm_mlp_adapter ./cambrian_7b_CLIP_mlp_2scale_layer11_shareGPT4V_pad_pretrain_lr1e4_old_TPU/mm_projector.bin \
     --vision_tower_aux_list '["openai/clip-vit-large-patch14-336"]' \
     --vision_tower_aux_token_len_list '[576]' \
     --compress_v_start_layer 11 \
