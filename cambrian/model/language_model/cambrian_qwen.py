@@ -584,10 +584,14 @@ def decoder_forward(
 	image_full_len=576,
 	**kwargs,):
 		if sep_sa_ffn:
+			# residual = hidden_states[:, image_full_len:]
+			# hidden_states = self.input_layernorm(hidden_states)
+			# kv_states = hidden_states
+			# hidden_states = hidden_states[:, image_full_len:]
 			residual = hidden_states[:, image_full_len:]
-			hidden_states = self.input_layernorm(hidden_states)
-			kv_states = hidden_states
+			kv_states = self.input_layernorm(hidden_states)
 			hidden_states = hidden_states[:, image_full_len:]
+			hidden_states = self.input_layernorm(hidden_states)
 		else:
 			residual = hidden_states
 			hidden_states = self.input_layernorm(hidden_states)

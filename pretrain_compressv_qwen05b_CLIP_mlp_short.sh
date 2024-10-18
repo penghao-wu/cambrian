@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="compressv_qwen05b_CLIP_mlp_2scaleold_layer12_shareGPT4V_square_pretrain_lr1e3_TPU" &&
+export CKPT_NAME="compressv_qwen05b_CLIP_mlp_2scaleold_layer12_sepnorm_shareGPT4V_square_pretrain_lr1e4_TPU" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -21,7 +21,7 @@ python cambrian/train/train_tpu.py \
     --compress_reduce_factor 4 \
     --compress_v True \
     --compress_v_start_layer 12 \
-    --mm_vision_mlp_lr 1e-3 \
+    --mm_vision_mlp_lr 1e-4 \
     --num_query_group 1 \
     --query_num_list '[576]' \
     --connector_depth 3 \
@@ -40,7 +40,7 @@ python cambrian/train/train_tpu.py \
     --bf16 False \
     --output_dir $CKPT_DIR \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 4 \
+    --per_device_train_batch_size 8 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy "no" \
