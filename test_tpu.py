@@ -1,33 +1,86 @@
+import urllib3.util.retry
+
+# Save the original is_exhausted method
+original_is_exhausted = urllib3.util.retry.Retry.is_exhausted
+
+# Define a new is_exhausted method that always returns False
+def infinite_is_exhausted(self):
+    return False
+
+# Monkey-patch the is_exhausted method
+urllib3.util.retry.Retry.is_exhausted = infinite_is_exhausted
+original_increment = urllib3.util.retry.Retry.increment
+
+# Define a new increment method that does not decrement counts
+def infinite_increment(self, method=None, url=None, response=None, error=None,
+                       _pool=None, _stacktrace=None):
+    # Keep the retry counts unchanged
+    total = self.total
+    connect = self.connect
+    read = self.read
+    redirect = self.redirect
+    status_count = self.status
+
+    # Rest of the original increment logic, without decrementing counts
+    cause = 'unknown'
+    status = None
+    redirect_location = None
+
+    if error and self._is_connection_error(error):
+        pass  # Do not decrement connect retries
+    elif error and self._is_read_error(error):
+        pass  # Do not decrement read retries
+    elif response and response.get_redirect_location():
+        redirect_location = response.get_redirect_location()
+        status = response.status
+    else:
+        cause = urllib3.exceptions.ResponseError.GENERIC_ERROR
+        if response and response.status:
+            status = response.status
+
+    history = self.history + (
+        urllib3.util.retry.RequestHistory(method, url, error, status, redirect_location),
+    )
+
+    new_retry = self.new(
+        total=total,
+        connect=connect,
+        read=read,
+        redirect=redirect,
+        status=status_count,
+        history=history,
+    )
+
+    # Do not raise MaxRetryError
+    return new_retry
+
+# Monkey-patch the increment method
+urllib3.util.retry.Retry.increment = infinite_increment
 import requests
-from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
-# Define your custom session creator
-def create_session_with_retries():
-    retry_strategy = Retry(
-    total=None,          # None means infinite retries
-    backoff_factor=1,    # Delay factor between retries
+# Create a retry strategy with any initial counts (they won't decrement)
+retry_strategy = urllib3.util.retry.Retry(
+    total=None,  # Can be None or any number since is_exhausted returns False
+    backoff_factor=1,  # Delay factor between retries
     status_forcelist=[429, 500, 502, 503, 504],  # Status codes to retry on
-    allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],  # Methods to retry
-    raise_on_status=False  # Do not raise exceptions on status codes
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session = requests.Session()
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    return session
+    allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],  # HTTP methods to retry
+)
 
-# Save the original requests.get method
-original_get = requests.get
+# Create an HTTP adapter with the retry strategy
+adapter = HTTPAdapter(max_retries=retry_strategy)
 
-# Define a new get method that uses the session with retries
-def new_get(*args, **kwargs):
-    session = create_session_with_retries()
-    return session.get(*args, **kwargs)
+# Create a session and mount the adapter
+session = requests.Session()
+session.mount("http://", adapter)
+session.mount("https://", adapter)
 
-# Monkey-patch requests.get
-requests.get = new_get
-Retry.BACKOFF_MAX = 10000000
+# Now use the session to make requests
+try:
+    response = session.get('http://example.com')
+    # Process the response as needed
+except requests.exceptions.RequestException as e:
+    print(f"An error occurred: {e}")
 import torch_xla._internal.tpu as tpu_module
 x = tpu_module.get_tpu_env()
 
