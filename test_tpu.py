@@ -1,3 +1,31 @@
+import requests
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
+
+# Define your custom session creator
+def create_session_with_retries():
+    retry_strategy = Retry(
+        total=500,  # Adjust the number of retries as needed
+        backoff_factor=0.5,  # Increase delay between retries
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS", "POST"]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session = requests.Session()
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+# Save the original requests.get method
+original_get = requests.get
+
+# Define a new get method that uses the session with retries
+def new_get(*args, **kwargs):
+    session = create_session_with_retries()
+    return session.get(*args, **kwargs)
+
+# Monkey-patch requests.get
+requests.get = new_get
 import torch_xla._internal.tpu as tpu_module
 x = tpu_module.get_tpu_env()
 
