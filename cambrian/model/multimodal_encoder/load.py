@@ -12,7 +12,7 @@ from .midas_encoder import MiDaSVisionTower
 from .moco_encoder import MoCoVisionTower
 from .supervised_vit_encoder import SupervisedViT_VisionTower
 from .sam_encoder import SAMVisionTower
-from .diffusion_encoder import DiffusionVisionTower
+# from .diffusion_encoder import DiffusionVisionTower
 from .maws_encoder import MawsVisionTower
 
 
