@@ -5,7 +5,7 @@ from requests.adapters import HTTPAdapter
 # Define your custom session creator
 def create_session_with_retries():
     retry_strategy = Retry(
-        total=10000,  # Adjust the number of retries as needed
+        total=1000000,  # Adjust the number of retries as needed
         backoff_factor=1,  # Increase delay between retries
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["HEAD", "GET", "OPTIONS", "POST"]
