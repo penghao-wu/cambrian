@@ -16,7 +16,7 @@ from .moco_encoder import MoCoVisionTower
 from .hybrid_encoder import HybridVisionTower
 from .supervised_vit_encoder import SupervisedViT_VisionTower
 from .sam_encoder import SAMVisionTower
-from .diffusion_encoder import DiffusionVisionTower
+# from .diffusion_encoder import DiffusionVisionTower
 from .maws_encoder import MawsVisionTower
 
 
