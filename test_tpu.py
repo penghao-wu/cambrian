@@ -6,7 +6,7 @@ from requests.adapters import HTTPAdapter
 def create_session_with_retries():
     retry_strategy = Retry(
         total=1000000,  # Adjust the number of retries as needed
-        backoff_factor=1,  # Increase delay between retries
+        backoff_factor=10,  # Increase delay between retries
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["HEAD", "GET", "OPTIONS", "POST"]
     )
@@ -26,6 +26,7 @@ def new_get(*args, **kwargs):
 
 # Monkey-patch requests.get
 requests.get = new_get
+Retry.BACKOFF_MAX = 10000000
 import torch_xla._internal.tpu as tpu_module
 x = tpu_module.get_tpu_env()
 
