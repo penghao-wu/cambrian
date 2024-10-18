@@ -1,7 +1,6 @@
 import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-from cambrian.train.train_fsdp import train
 
 # Define your custom session creator
 def create_session_with_retries():
@@ -27,6 +26,8 @@ def new_get(*args, **kwargs):
 
 # Monkey-patch requests.get
 requests.get = new_get
+
+from cambrian.train.train_fsdp import train
 
 if __name__ == "__main__":
     train(attn_implementation="flash_attention_2")
