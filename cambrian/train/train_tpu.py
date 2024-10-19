@@ -1,31 +1,9 @@
-import requests
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
+import urllib3.util.retry
 
-# Define your custom session creator
-def create_session_with_retries():
-    retry_strategy = Retry(
-        total=50000,  # Adjust the number of retries as needed
-        backoff_factor=1,  # Increase delay between retries
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "OPTIONS", "POST"]
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session = requests.Session()
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    return session
-
-# Save the original requests.get method
-original_get = requests.get
-
-# Define a new get method that uses the session with retries
-def new_get(*args, **kwargs):
-    session = create_session_with_retries()
-    return session.get(*args, **kwargs)
-
-# Monkey-patch requests.get
-requests.get = new_get
+def infinite_is_exhausted(self):
+    return False
+# Monkey-patch the is_exhausted method
+urllib3.util.retry.Retry.is_exhausted = infinite_is_exhausted
 
 
 from cambrian.train.train_fsdp import train
