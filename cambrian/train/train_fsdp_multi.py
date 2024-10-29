@@ -14,7 +14,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-
+import ast
 import os
 import re
 import re
@@ -125,7 +125,7 @@ class DataArguments:
 	is_multimodal: bool = False
 	image_aspect_ratio: str = 'square'
 	image_position: int = 35  # depends on v1 conv
-
+	image_grid_pinpoints: Optional[str] = field(default=None)
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
@@ -1971,7 +1971,8 @@ def train(INDEX, attn_implementation=None):
 		if vision_tower_aux_list is not None:
 			data_args.image_processor_aux_list = [vision_tower_aux.image_processor for vision_tower_aux in vision_tower_aux_list]
 		data_args.is_multimodal = True
-
+		data_args.image_grid_pinpoints = ast.literal_eval(data_args.image_grid_pinpoints)
+		model.config.image_grid_pinpoints = data_args.image_grid_pinpoints
 		model.config.image_aspect_ratio = data_args.image_aspect_ratio
 		model.config.tokenizer_padding_side = tokenizer.padding_side
 		model.config.tokenizer_model_max_length = tokenizer.model_max_length
