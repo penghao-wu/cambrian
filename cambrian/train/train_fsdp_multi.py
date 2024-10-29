@@ -1971,8 +1971,9 @@ def train(INDEX, attn_implementation=None):
 		if vision_tower_aux_list is not None:
 			data_args.image_processor_aux_list = [vision_tower_aux.image_processor for vision_tower_aux in vision_tower_aux_list]
 		data_args.is_multimodal = True
-		data_args.image_grid_pinpoints = ast.literal_eval(data_args.image_grid_pinpoints)
-		model.config.image_grid_pinpoints = data_args.image_grid_pinpoints
+		if data_args.image_grid_pinpoints is not None:
+			data_args.image_grid_pinpoints = ast.literal_eval(data_args.image_grid_pinpoints)
+			model.config.image_grid_pinpoints = data_args.image_grid_pinpoints
 		model.config.image_aspect_ratio = data_args.image_aspect_ratio
 		model.config.tokenizer_padding_side = tokenizer.padding_side
 		model.config.tokenizer_model_max_length = tokenizer.model_max_length
