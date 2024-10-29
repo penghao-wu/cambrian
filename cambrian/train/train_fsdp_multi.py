@@ -1285,7 +1285,7 @@ def get_padding_offset(cur_size, original_size):
 		return padding, padding, 0, 0
 
 
-def prepare_image_information(per_crop_token_len, compress_reduce_factor, image_size, is_dummy=False, dummy_num=1, max_length=2048):
+def prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, dummy_num=1, max_length=2048):
 	height = width = int(per_crop_token_len**0.5)
 	height_compress = width_compress = height // compress_reduce_factor
 
@@ -1447,7 +1447,7 @@ def prepare_multimodal_data(input_ids, labels, attention_mask, image_size, max_n
 			# Here we do not consider unpadding thing or spatial concat and always append a newline after each image crop
 
 			if i < len(image_token_indices) - 2:
-				cur_image_info = prepare_image_information(per_crop_token_len, compress_reduce_factor, image_size[batch_idx], is_dummy=False, max_length=max_length)
+				cur_image_info = prepare_image_information(per_crop_token_len, compress_reduce_factor, is_dummy=False, max_length=max_length)
 				cur_attention_mask_image_full.append(cur_image_info['attention_mask_image_full'])
 				cur_attention_mask_image_compress.append(cur_image_info['attention_mask_image_compress'])
 				cur_attention_mask_newline_full.append(cur_image_info['attention_mask_newline_full'])
