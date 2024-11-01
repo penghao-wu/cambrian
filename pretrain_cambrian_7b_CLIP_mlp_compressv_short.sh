@@ -5,7 +5,7 @@ export XLA_USE_BF16=0 &&
 export WANDB_RESUME="allow" &&
 export WANDB_API_KEY="618eb3b78242f01000855a123d29e2ac98a60f30" &&
 export WANDB_PROJECT="compressv" &&
-export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_layer11_shareGPT4V_pad_pretrain_lr5e4_old_TPU" &&
+export CKPT_NAME="cambrian_7b_CLIP_mlp_2scale_layer11_shareGPT4V_pad_pretrain_lr2e4_old_TPU" &&
 
 export CKPT_DIR="gs://cambrian-archive/checkpoints/$CKPT_NAME" &&
 
@@ -30,7 +30,7 @@ python cambrian/train/train_tpu.py \
     --start_of_vision_sampler_layers 0 \
     --stride_of_vision_sampler_layers 3 \
     --mm_projector_type mlp2x_gelu \
-    --mm_vision_sampler_lr 5e-4 \
+    --mm_vision_sampler_lr 2e-4 \
     --tune_mm_mlp_adapter True \
     --mm_vision_select_layer -2 \
     --mm_use_im_start_end False \
